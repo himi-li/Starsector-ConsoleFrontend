@@ -551,10 +551,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float rowW = w - margin * 2f;
         CustomPanelAPI row = newPanel(rowW, H_SEARCH);
 
-        // 与搜索框同 x/y/高，靠 textLabel 的按钮式居中保证同带对齐。
-        // 早先用 addPara + Alignment.LMID，截图像素实测标签比输入框低 46 图像像素
-        //（约 29 逻辑像素），故改用 textLabel，理由见其注释。
-        textLabel(row, 0f, 0f, 44f, H_SEARCH_FIELD, "搜索", Misc.getGrayColor());
+        // 与搜索框同 x/y；paraLabel 会把 ink 垂直居中到 H_SEARCH_FIELD 这条带
+        //（addPara 的先天偏移由其内部抵消，见其注释）。
+        paraLabel(row, 0f, 0f, 44f, H_SEARCH_FIELD, "搜索", Misc.getGrayColor());
 
         // 右侧两个按钮各 112 宽，从 rowW-240 与 rowW-122 起；
         // 输入框必须在其左侧留出间隙（这里留 12px），否则会横向压到按钮上。
@@ -1078,38 +1077,44 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return b;
     }
 
-    /** 纯文字标签的递增计数，只用于生成互不相同的控件 id。 */
-    private int labelSeq = 0;
+    /**
+     * addPara 的 pad 到「文字 ink 垂直中心」的距离（逻辑像素）。
+     *
+     * <p>实测标定：搜索行里 tooltip 放在 y=0、{@code addPara("搜索", 8f, ...)}，
+     * 截图 ink 落在图像 184..207（中心 195.5）；同一行的文本框填充带为 141..175，
+     * 而该文本框的逻辑 y 正是 0（图像 141 ↔ 逻辑 0，比例 1.6）⇒ ink 中心在逻辑 34.1，
+     * 即 {@code 8 + 26.1}。所以本常数 = 26f（victor16）。
+     */
+    private static final float LABEL_INK_CENTER = 26f;
 
     /**
-     * 画一段纯文字标签（不可点击的透明按钮）。
+     * 一段纯文字标签（真正的 {@link LabelAPI}，纵向与同排控件居中）。
      *
-     * <p>反汇编 {@code StandardTooltipV2Expandable.addPara(String,Color,float)} 后确认：
-     * addPara 生成的标签是<b>相对前一个元素</b>摆放的（首个元素 {@code inTL(0, pad)}，
-     * 之后 {@code belowLeft(prev, pad)}），落点还受容器尺寸与 {@code autoSizeToWidth}
-     * 的结果影响，因此无法用一个统一常数把标签校到与输入框同一条带。
-     * 截图像素实测：同一行内文本框填充带与按钮填充带（y 141..175）完全重合，
-     * 而 addPara 标签的 ink 落在 y 187..207；日志区标题却只低约 8 像素 ⇒ 偏移量不一致。
+     * <p>为什么需要这个助手：{@code addPara} 生成的标签先天比 {@code y + pad} 低
+     * 一个行高左右（见 {@link #LABEL_INK_CENTER} 的标定），而按钮与文本框没有这个偏移，
+     * 于是同一行里「搜索」二字会明显掉到搜索框下面。反汇编
+     * {@code StandardTooltipV2Expandable.addPara(String,Color,float)} 可见首个元素就是
+     * {@code panel.add(label); inTL(0, pad)}，偏移不来自这里、也无法从 API 侧关掉，
+     * 只能在调用侧用 pad 抵消。
      *
-     * <p>改为用「透明、不可点击的按钮」画文字：按钮与输入框走同一套定位与垂直居中，
-     * 天然对齐。代价是按钮字体只能取 {@code setButtonFont*} 里的 Victor14
-     *（没有 setButtonFont(String)），比正文的 {@link #FONT_PARA}（victor16）略小。
-     * 刻意<b>不</b>把自己加进 {@code interactive} 列表：它只是文字，不参与点击与命中判定。
+     * <p>{@code h} 传<b>同排可见控件的高度</b>（搜索框 22、按钮 24…），标签的 ink 中心
+     * 就被摆到 {@code y + h / 2}。刻意<b>不</b>改成「透明按钮」画文字（试过）：按钮自带
+     * 描边，肉眼一看就是个按钮，却又不该点，比偏移更糟。
      */
-    private ButtonAPI textLabel(CustomPanelAPI host, float x, float y, float w, float h,
-                                String text, Color color) {
+    private LabelAPI paraLabel(CustomPanelAPI host, float x, float y, float w, float h,
+                               String text, Color color) {
         float cw = Math.max(1f, w);
         float ch = Math.max(1f, h);
         TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
         host.addUIElement(tm).inTL(x, y);
-        tm.setButtonFontVictor14();
-        ButtonAPI b = tm.addButton(text, "label|" + (labelSeq++) + "|" + text, color, new Color(0, 0, 0, 0),
-                Alignment.MID, CutStyle.NONE, cw, ch, 0f);
+        tm.setParaFont(FONT_PARA);
+        // ink 中心 = pad + LABEL_INK_CENTER，令其等于 h/2 即得此行要求的 pad。
+        LabelAPI lab = tm.addPara(escapePercent(text), h / 2f - LABEL_INK_CENTER, color);
         try {
-            b.setClickable(false);
+            lab.setAlignment(Alignment.TL);
         } catch (Throwable ignored) {
         }
-        return b;
+        return lab;
     }
 
     /**
