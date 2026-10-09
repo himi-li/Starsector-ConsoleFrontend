@@ -33,28 +33,41 @@ public class FrontendDialogDelegate extends BaseCustomDialogDelegate {
         panel.attachToDialog(host);
     }
 
-    /** 我们自带了「关闭」按钮，不需要对话框的取消按钮。 */
+    /** 我们自带了【关闭】按钮，不需要对话框的取消按钮。 */
     @Override
     public boolean hasCancelButton() {
         return false;
     }
 
+    /**
+     * 不要对话框自带的确认按钮。
+     *
+     * <p>实测：返回 null 时游戏会渲染一个默认的【确认 [G]】按钮，但它点击后走的是
+     * {@code customDialogConfirm()}，与我们的面板逻辑无关，表现为【按钮无效】。
+     * 返回空串则不渲染该按钮 —— 关闭动作由面板自己的【关闭 (ESC)】按钮负责。
+     */
     @Override
     public String getConfirmText() {
-        return null;
+        return "";
     }
 
     @Override
     public String getCancelText() {
-        return null;
+        return "";
     }
 
     @Override
     public void customDialogConfirm() {
+        if (panel != null) {
+            panel.close();
+        }
     }
 
     @Override
     public void customDialogCancel() {
+        if (panel != null) {
+            panel.close();
+        }
     }
 
     @Override

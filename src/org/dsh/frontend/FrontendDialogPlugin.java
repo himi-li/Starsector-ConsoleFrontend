@@ -15,8 +15,8 @@ import java.util.Map;
  * 承载前端面板的交互对话框插件。
  *
  * <p>全部使用公共 API，不涉及任何反射：
- * {@code CampaignUIAPI.showInteractionDialog(plugin, token)} → 本类的 init() →
- * {@code dialog.showCustomDialog(w, h, delegate)} → 得到 CustomPanelAPI。
+ * {@code CampaignUIAPI.showInteractionDialog(plugin, token)} -> 本类的 init() ->
+ * {@code dialog.showCustomDialog(w, h, delegate)} -> 得到 CustomPanelAPI。
  */
 public class FrontendDialogPlugin implements InteractionDialogPlugin {
 

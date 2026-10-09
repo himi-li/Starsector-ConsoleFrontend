@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * ID 选择器的数据源：把游戏内各种 spec 的「显示名 + ID」收集成可搜索列表。
+ * ID 选择器的数据源：把游戏内各种 spec 的【显示名 + ID】收集成可搜索列表。
  * 名称优先显示，ID 作为注释保留。
  */
 public final class IdSource {
@@ -347,7 +347,7 @@ public final class IdSource {
     }
 
     /**
-     * 把玩家输入的文本解析为真实 ID：精确 ID → 精确名称 → 忽略大小写名称 → 唯一前缀 → 唯一包含。
+     * 把玩家输入的文本解析为真实 ID：精确 ID -> 精确名称 -> 忽略大小写名称 -> 唯一前缀 -> 唯一包含。
      * 无法唯一确定时返回原文本（交给 Console 报错并显示语法）。
      */
     public static String resolve(List<IdOption> options, String text) {

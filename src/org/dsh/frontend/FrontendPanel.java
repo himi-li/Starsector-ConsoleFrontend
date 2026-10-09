@@ -38,7 +38,7 @@ import java.util.Map;
  * 控制台前端面板：热键呼出的覆盖层，点击按钮即自动执行对应的 Console Commands 命令。
  *
  * <p>带参数的命令支持自定义参数并记住（{@link ParamStore}）；ID 类参数提供
- * 「游戏内名称优先、ID 作为注释」的可搜索下拉选择器，同时允许直接输入。
+ * 【游戏内名称优先、ID 作为注释】的可搜索下拉选择器，同时允许直接输入。
  *
  * <p>三个关键实现约束（均来自对已装 Mod 与 Console Commands 源码的核对）：
  * <ol>
@@ -112,7 +112,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     //
     // 注意：原版 TextFieldAPI 的<b>实际渲染高度大于请求高度</b>——
     // 请求 24px 时实测约占 40px（与字体行高有关）。因此行距不能按请求高度算，
-    // 必须按「最坏情况渲染高度」留白，否则搜索框底部会压到下一行的标签栏。
+    // 必须按【最坏情况渲染高度】留白，否则搜索框底部会压到下一行的标签栏。
     // 下面每行的可用高度都按 40px 预留。
     private static final float Y_HEADER = 8f;
     private static final float H_HEADER = 30f;
@@ -290,8 +290,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         // 战役中创建一个透明的提示对话框占位：
         //   作用 —— 拦住其它 mod 与地图输入；
         //   关键 —— 必须把它设为完全透明，否则它会盖在面板上方，
-        //          玩家只会看到一个空对话框 + 「确定」按钮（实测现象）；
-        //   查找 —— 对话框挂在 screenPanel 上，通过「含 getOptionMap 的子面板」定位，
+        //          玩家只会看到一个空对话框 + 【确定】按钮（实测现象）；
+        //   查找 —— 对话框挂在 screenPanel 上，通过【含 getOptionMap 的子面板】定位，
         //          与 Console Commands 的做法一致（原实现误从 CampaignUIAPI 取字段，永远取不到）。
         if (context != null && context.isInCampaign()) {
             try {
@@ -345,7 +345,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         Reflect.invoke(spObj, "addComponent", parent);
         parent.getPosition().inTL(0f, 0f);
         // 提到最上层：占位对话框是后于我们之外挂到 screenPanel 上的，
-        // 不提升层级的话面板会被它压在下面（实测表现为「只有一个空对话框 + 确定按钮」）。
+        // 不提升层级的话面板会被它压在下面（实测表现为【只有一个空对话框 + 确定按钮】）。
         try {
             Reflect.invoke(spObj, "bringComponentToTop", parent);
         } catch (Throwable ignored) {
@@ -413,7 +413,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         bgPanel.getPosition().inTL(mountedInDialog ? 0f : (fullW - contentW) / 2f, mountedInDialog ? 0f : 30f);
 
         // 记住当前聚焦的字段：重建后要恢复它。
-        // 若这里清成 null，则「按键 → 重建 → 失焦」会让玩家每次只能输入一个字符（实测问题）。
+        // 若这里清成 null，则【按键 -> 重建 -> 失焦】会让玩家每次只能输入一个字符（实测问题）。
         final String keepFocus = focusedField;
 
         clearPanel(bgPanel);
@@ -442,7 +442,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
 
         // 恢复重建前的聚焦字段（对应的新 TextFieldAPI 实例），
-        // 否则「按键 → 重建 → 失焦」会让玩家每按一次键就要重新点一次输入框。
+        // 否则【按键 -> 重建 -> 失焦】会让玩家每按一次键就要重新点一次输入框。
         if (keepFocus != null && fields.containsKey(keepFocus)) {
             focusedField = keepFocus;
             try {
@@ -493,9 +493,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float rowW = w - margin * 2f;
         CustomPanelAPI row = newPanel(rowW, H_SEARCH);
 
-        TooltipMakerAPI tm = row.createUIElement(44f, 20f, false);
-        row.addUIElement(tm).inTL(0f, 8f);
-        tm.addPara("搜索", 6f, Misc.getGrayColor());
+        // 与搜索框同高同 y，并垂直居中，否则文字会显得偏上（实测未对齐）
+        TooltipMakerAPI tm = row.createUIElement(44f, H_SEARCH_FIELD, false);
+        row.addUIElement(tm).inTL(0f, 0f);
+        LabelAPI searchLab = tm.addPara("搜索", 6f, Misc.getGrayColor());
+        try {
+            searchLab.setAlignment(Alignment.LMID);
+        } catch (Throwable ignored) {
+        }
 
         // 右侧两个按钮各 112 宽，从 rowW-240 与 rowW-122 起；
         // 输入框必须在其左侧留出间隙（这里留 12px），否则会横向压到按钮上。
@@ -554,11 +559,21 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
         float rowW = w - margin * 2f;
         float y = Y_CONTENT;
+        // 每行 30px：标题 + 参数行 + 底部按钮行；
+        // 额外 +40 给文本框的实际渲染高度留余量（请求 22 实测约占 42）。
         float lineH = 30f;
         int lines = 1 + Math.max(1, e.params.size()) + 1;
-        float areaH = lines * lineH + 16f;
+        float areaH = lines * lineH + 40f;
 
         CustomPanelAPI box = newPanel(rowW, areaH);
+        // 背景板：参数区叠在按钮列表之上，没有底色会让两层文字互相穿透看不清（实测）。
+        try {
+            TooltipMakerAPI bg = box.createUIElement(rowW, areaH, false);
+            box.addUIElement(bg).inTL(0f, 0f);
+            bg.addImage(Global.getSettings().getSpriteName("ui", "panel00_center"), rowW, areaH, 0f);
+        } catch (Throwable ignored) {
+        }
+
         TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 26f, false);
         box.addUIElement(tm).inTL(8f, 4f);
         tm.setParaFontVictor14();
@@ -567,10 +582,16 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float fy = 26f;
         for (ParamSpec p : e.params) {
             float labelW = 130f;
+            // 标签与控件用同一 y 并垂直居中；文本框实际渲染高度大于请求值时
+            // 标签偏上会显得未对齐（实测）。
             TooltipMakerAPI lt = box.createUIElement(labelW, lineH, false);
-            box.addUIElement(lt).inTL(8f, fy + 6f);
-            lt.addPara(escapePercent(p.labelOrKey() + (p.required ? " *" : "")), 6f,
+            box.addUIElement(lt).inTL(8f, fy);
+            LabelAPI lab = lt.addPara(escapePercent(p.labelOrKey() + (p.required ? " *" : "")), 6f,
                     p.required ? Misc.getHighlightColor() : Misc.getGrayColor());
+            try {
+                lab.setAlignment(Alignment.LMID);
+            } catch (Throwable ignored) {
+            }
 
             String key = fieldKey(e.command, p.key);
             float ctlX = 8f + labelW;
@@ -579,24 +600,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
             if (p.isPicker()) {
                 float pickW = ctlW - 34f;
-                textField(box, ctlX, fy + 2f, pickW, 24f, val, key);
-                button(box, ctlX + pickW + 4f, fy + 2f, 28f, 24f, "▼",
+                textField(box, ctlX, fy, pickW, 24f, val, key);
+                // 用 v 代替 v（U+9660 在游戏字体里没有字形）
+                button(box, ctlX + pickW + 4f, fy, 28f, 24f, "v",
                         "pickopen|" + e.command + "|" + p.key,
                         escapePercent("打开" + IdSource.displayNameOf(p.source) + "选择器（可搜索，名称优先）"));
             } else if (p.isNumeric()) {
                 float stepW = 28f;
                 float fw = Math.max(80f, ctlW - (stepW + 4f) * 2f - 4f);
-                textField(box, ctlX, fy + 2f, fw, 24f, val, key);
-                button(box, ctlX + fw + 4f, fy + 2f, stepW, 24f, "-",
+                textField(box, ctlX, fy, fw, 24f, val, key);
+                button(box, ctlX + fw + 4f, fy, stepW, 24f, "-",
                         "pstep|" + e.command + "|" + p.key + "|dec", "减少");
-                button(box, ctlX + fw + stepW + 8f, fy + 2f, stepW, 24f, "+",
+                button(box, ctlX + fw + stepW + 8f, fy, stepW, 24f, "+",
                         "pstep|" + e.command + "|" + p.key + "|inc", "增加");
             } else if (ParamSpec.TYPE_BOOL.equals(p.type)) {
                 boolean on = isOn(val);
-                button(box, ctlX, fy + 2f, 120f, 24f, on ? "开 (ON)" : "关 (OFF)",
+                button(box, ctlX, fy, 120f, 24f, on ? "开 (ON)" : "关 (OFF)",
                         "pbool|" + e.command + "|" + p.key, "点击切换");
             } else {
-                textField(box, ctlX, fy + 2f, ctlW, 24f, val, key);
+                textField(box, ctlX, fy, ctlW, 24f, val, key);
             }
 
             if (p.hint != null && !p.hint.isEmpty()) {
@@ -622,7 +644,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         button(box, rowW - 98f, fy + 2f, 90f, 24f, "收起", "editclose", null);
 
         place(box, margin, y);
-        return areaH + 8f;
+        // 返回真实占用高度供列表区下移；必须 >= areaH，
+        // 否则列表区会叠到参数区上（实测：加物品参数页与按钮重叠）。
+        return areaH + 12f;
     }
 
     private void buildListArea(float w, float h, float margin, float paramsH) {
@@ -671,8 +695,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     main.setEnabled(false);
                 }
                 if (hasEdit) {
-                    button(rowPanel, cx + mainW + 3f, 0f, editW, FrontendSettings.buttonHeight, "⚙",
-                            "edit|" + e.command, escapePercent("调整「" + e.labelOrName() + "」的参数"));
+                    // 按钮文字用 *：齿轮符号 U+2699 在游戏字体里没有字形，
+                    // 会显示成问号（实测）。
+                    button(rowPanel, cx + mainW + 3f, 0f, editW, FrontendSettings.buttonHeight, "*",
+                            "edit|" + e.command, escapePercent("调整【" + e.labelOrName() + "】的参数"));
                 }
             }
             content.addCustom(rowPanel, 4f);
@@ -853,7 +879,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     /**
      * 在 host 内的指定位置放一个按钮。
-     * 顺序很关键：先 createUIElement → addUIElement 挂到面板 → 再 addButton，
+     * 顺序很关键：先 createUIElement -> addUIElement 挂到面板 -> 再 addButton，
      * 这样按钮的监听器才能解析到宿主面板（否则点击不会有任何反应）。
      */
     private ButtonAPI button(CustomPanelAPI host, float x, float y, float w, float h,
@@ -882,7 +908,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 public void createTooltip(TooltipMakerAPI tooltip, boolean expanded, Object tooltipParam) {
                     // addPara 内部会走 String.format，正文里的 '%' 会被当成格式符，
                     // 触发 UnknownFormatConversionException（实测闪退：Conversion = ' '，
-                    // 来自 desc「补到约 50% 载货量」）。这里统一转义为 %%。
+                    // 来自 desc【补到约 50% 载货量】）。这里统一转义为 %%。
                     tooltip.addPara(escapePercent(body), 6f, Misc.getTextColor());
                 }
             }, TooltipMakerAPI.TooltipLocation.BELOW);
@@ -916,7 +942,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      * <p>刻意<b>不</b>使用原生 TextFieldAPI 的焦点机制：原版 TextField 一旦 grabFocus()
      * 就会吞掉所有按键（包括 ESC），既无法关闭面板，也会让热键失效
      * （RefitFilters 的 SearchBarFilterPanel.kt:62-65 对此有明确注释）。
-     * 这里改为自行记录「当前聚焦字段」，把按键转发给它，ESC 始终优先处理。
+     * 这里改为自行记录【当前聚焦字段】，把按键转发给它，ESC 始终优先处理。
      */
     @Override
     public void processInput(List<InputEventAPI> events) {
@@ -951,17 +977,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     }
                     continue;
                 }
-                // 3) 键盘事件转发给聚焦字段；无聚焦时一律吞掉，防止穿透到战役/战斗 UI
+                // 3) 键盘事件：聚焦字段已 grabFocus，由原生 TextField 与 IME 处理，
+                //    这里不 consume（否则会打断 IME 组合串与原生输入）。
+                //    仅在无聚焦时吞掉，防止穿透到战役/战斗 UI。
                 if (e.isKeyboardEvent()) {
-                    if (focusedField != null && forwardKey(e)) {
+                    if (focusedField == null) {
                         e.consume();
-                    } else if (focusedField == null) {
-                        e.consume();
+                    } else if (e.isKeyDownEvent()) {
+                        int v = e.getEventValue();
+                        if (v == Keyboard.KEY_RETURN || v == Keyboard.KEY_NUMPADENTER) {
+                            commitFocused();
+                            setFocus(null);
+                        }
                     }
                     continue;
                 }
-                // 4) 其它鼠标事件（移动 / 滚轮）：不在控件上就吞掉
-                if (e.isMouseEvent() && !insideAnyElement(e)) {
+                // 4) 鼠标移动事件不 consume：否则引擎无法派发 hover，
+                //    会导致部分按钮悬浮不变色（实测）。
+                //    只吞滚轮，避免滚到战役/战斗 UI。
+                if (e.isMouseScrollEvent()) {
                     e.consume();
                 }
             }
@@ -996,6 +1030,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             if (key != null) {
                 TextFieldAPI f = fields.get(key);
                 if (f != null) {
+                    // 让原生控件真正获得焦点：ChineseInputFix 通过 Win32 IME 组合 +
+                    // 模拟 Ctrl+V 投递到【有焦点的原生控件】，不 grabFocus 则中文无法输入。
+                    try {
+                        f.grabFocus(true);
+                    } catch (Throwable ignored) {
+                    }
                     f.showCursor();
                 }
             }
@@ -1276,7 +1316,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glColor4f(c.getRed() / 255f, c.getGreen() / 255f, c.getBlue() / 255f, a * alphaMult);
             GL11.glRectf(0f, 0f, Global.getSettings().getScreenWidth(), Global.getSettings().getScreenHeight());
-            // 内容区再叠一层，形成「面板内更暗」的层次
+            // 内容区再叠一层，形成【面板内更暗】的层次
             if (bgPanel != null && bgPanel.getPosition() != null) {
                 PositionAPI bp = bgPanel.getPosition();
                 float bx = bp.getX();
@@ -1570,7 +1610,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return built;
     }
 
-    /** 解析所有参数（ID 类做名称→ID 映射），生成要执行的命令行。 */
+    /** 解析所有参数（ID 类做名称->ID 映射），生成要执行的命令行。 */
     private List<String> buildLines(CatalogEntry e) {
         List<String> lines = new ArrayList<String>();
         Map<String, String> vals = new LinkedHashMap<String, String>();
@@ -1688,7 +1728,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     }
                     final CatalogEntry entry = e;
                     boolean shown = ui.showConfirmDialog(
-                            "确认执行「" + e.labelOrName() + "」？",
+                            "确认执行【" + e.labelOrName() + "】？",
                             "该操作可能无法撤销。\n\n将要执行：\n" + preview,
                             "执行",
                             new Script() {
@@ -1762,7 +1802,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      * <p>游戏 UI 的 {@code addPara(String, float, Color)} 内部使用
      * {@code String.format}，正文中未配对的 '%' 会抛
      * {@code UnknownFormatConversionException} 并导致游戏闪退
-     * （实测：desc「补到约 50% 载货量」触发 Conversion = ' '）。
+     * （实测：desc【补到约 50% 载货量】触发 Conversion = ' '）。
      * 所有来自数据文件 / 命令帮助 / ID 名称的动态文本都必须先过这里。
      */
     static String escapePercent(String s) {
@@ -1779,7 +1819,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 
-    /** 诊断日志：排查「面板没出现」这类问题时看 starsector.log 里的 [ConsoleFrontend]。 */
+    /** 诊断日志：排查【面板没出现】这类问题时看 starsector.log 里的 [ConsoleFrontend]。 */
     private static void info(String msg) {
         try {
             Global.getLogger(FrontendPanel.class).info("[ConsoleFrontend] " + msg);

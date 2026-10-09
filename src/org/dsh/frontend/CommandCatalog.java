@@ -14,7 +14,7 @@ import java.util.Set;
 
 /**
  * 命令目录：精选中文条目 + 自动枚举的其余全部命令。
- * 自动枚举保证「装任何 Mod 的新命令都会自动出现在面板上」。
+ * 自动枚举保证【装任何 Mod 的新命令都会自动出现在面板上】。
  */
 public final class CommandCatalog {
 

@@ -8,7 +8,7 @@ package org.dsh.frontend;
  * {@code SecurityException: File access and reflection are not allowed to scripts}。
  * 实测连 {@code Class.getMethods()}（public 方法枚举）都会被拒绝，
  * 自建 {@code MethodHandles.lookup().findVirtual(...)} 也会失败（日志显示 handle=null）。
- * 因此「自己写一套反射」这条路在本环境是走不通的。
+ * 因此【自己写一套反射】这条路在本环境是走不通的。
  *
  * <p><b>可行方案</b>：直接复用 Console Commands 的
  * {@code org.lazywizard.console.overlay.v2.misc.ReflectionUtils}。它同样用
