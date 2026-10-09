@@ -1,4 +1,4 @@
-﻿<#
+<#
     Console Frontend — 构建脚本
     用法:
         .\build.ps1                     # 编译并打包到 jars/ConsoleFrontend.jar
@@ -8,8 +8,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$StarsectorDir = 'C:\Games\Starsector',
-    [string]$JdkDir = 'C:\Program Files\BellSoft\LibericaJDK-21\bin',
+    [string]$StarsectorDir = '',
+    [string]$JdkDir = '',
     [switch]$Deploy,
     [switch]$Verify
 )
@@ -29,6 +29,20 @@ function Info($msg) {
 
 function Ok($msg) {
     Write-Host $msg -ForegroundColor Green
+}
+
+# ---------- 0. 本机路径（不进入版本库） ----------
+# 取值优先级：命令行参数 > 环境变量 > 仓库根目录下未跟踪的 .build.local.ps1
+# 仓库本身不携带任何本机绝对路径；.build.local.ps1 已列入 .gitignore。
+$localCfg = Join-Path $root '.build.local.ps1'
+if (Test-Path $localCfg) { . $localCfg }
+if (-not $StarsectorDir) { $StarsectorDir = $env:STARSECTOR_DIR }
+if (-not $JdkDir) { $JdkDir = $env:JAVAC_BIN_DIR }
+if (-not $StarsectorDir) {
+    Fail '未指定远行星号根目录。请用 -StarsectorDir <路径>，或设置环境变量 STARSECTOR_DIR，或在仓库根目录创建 .build.local.ps1。'
+}
+if (-not $JdkDir) {
+    Fail '未指定 JDK 的 bin 目录。请用 -JdkDir <路径>，或设置环境变量 JAVAC_BIN_DIR，或在仓库根目录创建 .build.local.ps1。'
 }
 
 # ---------- 1. 定位工具链与依赖 ----------

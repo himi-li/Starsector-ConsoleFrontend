@@ -1,7 +1,9 @@
 # 构建产物
 build/
 *.class
-jars/*.jar
+# 注意：jars/ConsoleFrontend.jar 刻意纳入版本库，
+# 这样用户克隆仓库后即可直接放入 mods/ 使用，无需自备 JDK。
+# 发行包（Release）另行附带 zip。
 
 # 编辑器 / 系统
 .idea/
@@ -17,3 +19,6 @@ Thumbs.db
 
 # 可恢复的本地暂存（删除前先移入这里，不进版本库）
 _trash/
+
+# 本机构建路径覆盖（含本机绝对路径，禁止提交）
+.build.local.ps1

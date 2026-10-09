@@ -1,7 +1,27 @@
 # Console Frontend — 远行星号控制台前端按钮面板
 
+> **AI 使用说明 / AI Disclosure**
+> 本项目的源代码、文档与发行包，均由作者与 AI 助手协作生成。
+> *The source code, documentation, and release artifacts of this project were produced by the author in collaboration with an AI assistant.*
+> AI 参与不等于免于审查：所有改动均已在本机游戏中实测通过后再发布。
+
 为 [Console Commands](https://github.com/LazyWizard/console-commands/) 提供的中文按钮式前端面板：
 **点击按钮即自动执行对应的控制台命令**，无需记忆命令名与参数。
+
+## English Summary
+
+A Chinese-language button panel for [Console Commands](https://github.com/LazyWizard/console-commands/):
+every console command gets a clickable button, so you never have to remember command names or parameters.
+
+- **Hotkey**: `Ctrl + ~` by default; changeable in the LunaLib mod settings.
+- **Persistent parameters**: set an amount once — it is remembered until you change it again.
+- **ID picker**: for ID arguments (e.g. `additem`) you get a searchable list that shows the
+  **in-game display name first, with the raw ID as a grey annotation**.
+- **All commands collected automatically**: any command registered by any installed mod appears on the panel.
+- **UI language**: Chinese; a "use English labels" toggle is available in the settings.
+
+**Requirements**: Console Commands 4.0.x (`lw_console`) and LazyLib. LunaLib is optional.
+**Install**: drop the `ConsoleFrontend` folder into `Starsector/mods/`, then enable it in the launcher.
 
 ## 特性
 
@@ -12,15 +32,20 @@
   （保存在 `saves/common/config/console_frontend_params.json.data`）。
 - **ID 选择器**：需要 ID 的参数（如「加物品」）提供「下拉选择 + 直接输入 + 搜索」三合一，
   列表**以游戏内名称为主，ID 以灰色小字作为注释保留**。
-- **中文界面**：依赖游戏中文汉化包的字体（`victor10` / `insignia15LTaa` 已含 CJK 字形）。
+- **中文界面**：界面字体使用游戏内置、且已含 CJK 字形的 `graphics/fonts/victor16.fnt`
+  （本面板不打包字体文件，直接读取游戏自带的字库）。
   若未安装汉化包，可在设置中开启 `使用英文标签`。
 
 ## 安装
 
 1. 确认已安装 **Console Commands 4.0.x**（id: `lw_console`）与 **LazyLib**。
-2. 把 `ConsoleFrontend` 文件夹放入 `Starsector/mods/`。
-3. 在启动器中启用 **Console Frontend**。
-4. 进入存档后按 `Ctrl + ~` 呼出面板。
+2. 从本仓库的 **Releases** 页面下载 `ConsoleFrontend-0.1.0.zip` 并解压
+   （仓库本身只保存源码，`jars/*.jar` 属构建产物、不纳入版本控制；从源码构建见下节）。
+3. 把 `ConsoleFrontend` 文件夹放入 `Starsector/mods/`。
+4. 在启动器中启用 **Console Frontend**。
+5. 进入存档后按 `Ctrl + ~` 呼出面板。
+
+从源码构建得到的 `jars/ConsoleFrontend.jar` 与发行包内的 jar 完全一致。
 
 ## 构建
 
@@ -38,10 +63,25 @@
 
 | 参数 | 说明 |
 |---|---|
-| `-StarsectorDir <路径>` | 远行星号根目录，默认 `C:\Games\Starsector` |
-| `-JdkDir <路径>` | JDK 的 bin 目录，默认 `C:\Program Files\BellSoft\LibericaJDK-21\bin` |
+| `-StarsectorDir <路径>` | 远行星号根目录（**无内置默认值**，须自行提供） |
+| `-JdkDir <路径>` | JDK 的 bin 目录（**无内置默认值**，须自行提供） |
 | `-Deploy` | 构建后复制到 `mods\ConsoleFrontend` |
 | `-Verify` | 构建后运行数据文件一致性校验 |
+
+仓库本身不含任何本机绝对路径。请用下列任一方式提供以上两个路径：
+
+```powershell
+# 方式一：命令行参数
+.\build.ps1 -StarsectorDir 'D:\Games\Starsector' -JdkDir 'C:\Program Files\Java\jdk-21\bin'
+
+# 方式二：环境变量 STARSECTOR_DIR / JAVAC_BIN_DIR
+$env:STARSECTOR_DIR = 'D:\Games\Starsector'
+$env:JAVAC_BIN_DIR  = 'C:\Program Files\Java\jdk-21\bin'
+
+# 方式三：在仓库根目录建一个 .build.local.ps1（已列入 .gitignore，不会被提交）
+$StarsectorDir = 'D:\Games\Starsector'
+$JdkDir        = 'C:\Program Files\Java\jdk-21\bin'
+```
 
 ## 自定义按钮
 
