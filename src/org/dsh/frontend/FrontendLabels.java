@@ -1,6 +1,7 @@
 package org.dsh.frontend;
 
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.ModSpecAPI;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -78,7 +79,7 @@ public final class FrontendLabels {
         categories.clear();
         order.clear();
         try {
-            String raw = Global.getSettings().loadText("data/strings/frontend_labels.json", FrontendSettings.MOD_ID);
+            String raw = readLabelsFile();
             if (raw == null || raw.trim().isEmpty()) {
                 return;
             }
@@ -180,6 +181,44 @@ public final class FrontendLabels {
             } catch (Throwable ignored) {
             }
         }
+    }
+
+    /**
+     * 读取本 mod 的 frontend_labels.json。
+     *
+     * <p>刻意不使用 {@code SettingsAPI.loadText(path, modId)}：该 API 与游戏加载
+     * 任务描述等资源走同一条路径，若在 ModPlugin.onApplicationLoad()（即
+     * ResourceLoaderState.init 期间）调用，会干扰游戏自身的资源查找。
+     * 这里直接按 mod 目录用 java.nio 读文件，完全不触碰游戏的资源加载状态。
+     */
+    private static String readLabelsFile() {
+        String rel = "data/strings/frontend_labels.json";
+        try {
+            ModSpecAPI spec = Global.getSettings().getModManager().getModSpec(FrontendSettings.MOD_ID);
+            if (spec != null) {
+                String base = spec.getPath();
+                if (base != null && !base.isEmpty()) {
+                    java.nio.file.Path p = java.nio.file.Paths.get(base, "data", "strings", "frontend_labels.json");
+                    if (java.nio.file.Files.isReadable(p)) {
+                        return new String(java.nio.file.Files.readAllBytes(p), java.nio.charset.StandardCharsets.UTF_8);
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        // 退路：按工作目录下的 mods/<目录名> 查找
+        try {
+            java.nio.file.Path p = java.nio.file.Paths.get("mods", "ConsoleFrontend", "data", "strings", "frontend_labels.json");
+            if (java.nio.file.Files.isReadable(p)) {
+                return new String(java.nio.file.Files.readAllBytes(p), java.nio.charset.StandardCharsets.UTF_8);
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            Global.getLogger(FrontendLabels.class).warn("找不到 " + rel + "，改用自动枚举模式。");
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 
     public static List<Category> sortedCategories() {
