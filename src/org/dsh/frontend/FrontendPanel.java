@@ -833,15 +833,21 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         for (int i = from; i < to; i++) {
             final IdOption o = filtered.get(i);
             CustomPanelAPI line = newPanel(innerW, lineH);
-            // 名称按钮占 62%，ID 注释占 36%（名称优先，ID 作注释）
+            // 名称按钮占 62%，ID 注释占 36%（名称优先，ID 作注释）。
+            // 两者同高同 y，注释垂直居中 —— 否则按钮文字居中而注释顶端对齐，视觉错位（实测）。
             float nameW = innerW * 0.62f;
-            button(line, 0f, 0f, nameW, lineH - 2f, shorten(o.primary(), 52),
+            float rowH = lineH - 2f;
+            button(line, 0f, 0f, nameW, rowH, shorten(o.primary(), 52),
                     "pick|" + pickerSource + "|" + o.id,
                     escapePercent(o.primary() + "\n" + o.secondary()));
 
-            TooltipMakerAPI idt = line.createUIElement(innerW * 0.36f, lineH, false);
-            line.addUIElement(idt).inTL(nameW + 4f, 5f);
-            idt.addPara(escapePercent(o.secondary()), 6f, Misc.getGrayColor());
+            TooltipMakerAPI idt = line.createUIElement(innerW * 0.36f, rowH, false);
+            line.addUIElement(idt).inTL(nameW + 4f, 0f);
+            LabelAPI idLab = idt.addPara(escapePercent(o.secondary()), 6f, Misc.getGrayColor());
+            try {
+                idLab.setAlignment(Alignment.LMID);
+            } catch (Throwable ignored) {
+            }
 
             list.addCustom(line, 2f);
         }
@@ -905,25 +911,44 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      * 一次拼出可缩放的窗框（MechExpansionModule 的 MEM_MotherShipFleetInfo.java:228 有范例）。
      * 这里直接调用它，避免自己拉伸中心图（实测单用 center 会出现条纹且不遮字）。
      */
+    /**
+     * 给面板铺一层纯色背景 + 边框。
+     *
+     * <p>曾用游戏的 panel00 九宫格，但那是装饰性花纹，拉伸后呈条纹状、观感杂乱（实测反馈）。
+     * 这里改为自带的纯色贴图：深灰底 + 一圈亮色边框，简洁且不与文字争视觉。
+     * 贴图在 graphics/cf_bg.png 与 graphics/cf_line.png，通过本 mod 的 settings.json 注册。
+     */
     private void drawPanelBackground(CustomPanelAPI host, float w, float h) {
         try {
+            String fill = Global.getSettings().getSpriteName("ui", "cf_bg");
+            String line = Global.getSettings().getSpriteName("ui", "cf_line");
+
+            // 底色：铺满
             TooltipMakerAPI bg = host.createUIElement(w, h, false);
             host.addUIElement(bg).inTL(0f, 0f);
-            SettingsAPI s = Global.getSettings();
-            String tl = s.getSpriteName("ui", "panel00_top_left");
-            String t = s.getSpriteName("ui", "panel00_top");
-            String tr = s.getSpriteName("ui", "panel00_top_right");
-            String l = s.getSpriteName("ui", "panel00_left");
-            String c = s.getSpriteName("ui", "panel00_center");
-            String r = s.getSpriteName("ui", "panel00_right");
-            String bl = s.getSpriteName("ui", "panel00_bot_left");
-            String b = s.getSpriteName("ui", "panel00_bot");
-            String br = s.getSpriteName("ui", "panel00_bot_right");
-            // 先铺一层不透明底色，确保文字不会被下方内容穿透
-            bg.setBgAlpha(1f);
-            bg.addImages(w, h, 0f, 0f, tl, t, tr, l, c, r, bl, b, br);
+            bg.addImage(fill, w, h, 0f);
+
+            // 边框：四张窄图分别定位（addImage 是顺序堆叠的，必须各自一个容器）
+            final float t = 2f;
+            addRect(host, line, 0f, 0f, w, t);              // 上
+            addRect(host, line, 0f, h - t, w, t);           // 下
+            addRect(host, line, 0f, 0f, t, h);              // 左
+            addRect(host, line, w - t, 0f, t, h);           // 右
         } catch (Throwable t) {
-            warn("绘制参数区背景失败: " + t);
+            warn("绘制面板背景失败: " + t);
+        }
+    }
+
+    /** 在指定位置画一张贴图（各自独立容器，避免顺序堆叠）。 */
+    private void addRect(CustomPanelAPI host, String sprite, float x, float y, float w, float h) {
+        if (w <= 0f || h <= 0f) {
+            return;
+        }
+        try {
+            TooltipMakerAPI tm = host.createUIElement(w, h, false);
+            host.addUIElement(tm).inTL(x, y);
+            tm.addImage(sprite, w, h, 0f);
+        } catch (Throwable ignored) {
         }
     }
 

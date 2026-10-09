@@ -207,18 +207,34 @@ if ($Verify) {
 if ($Deploy) {
     $dest = Join-Path $StarsectorDir 'mods\ConsoleFrontend'
     Info "部署到 $dest ..."
-    if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
-    New-Item -ItemType Directory -Force -Path (Join-Path $dest 'jars') | Out-Null
-    Copy-Item (Join-Path $root 'mod_info.json') $dest
-    Copy-Item $jarPath (Join-Path $dest 'jars')
-    Copy-Item (Join-Path $root 'data') $dest -Recurse
-    Copy-Item (Join-Path $root 'README.md') $dest -ErrorAction SilentlyContinue
-    Copy-Item (Join-Path $root 'LICENSE') $dest -ErrorAction SilentlyContinue
 
-    # 部署后自检
-    foreach ($f in @('mod_info.json', 'jars\ConsoleFrontend.jar', 'data\console\commands.csv',
-                     'data\config\settings.json', 'data\config\LunaSettings.csv',
-                     'data\strings\frontend_labels.json')) {
+    # 注意：不要先 Remove-Item 整个目录。
+    # 若删除后中途失败（例如 jar 被占用），会留下一个残缺的 mod 目录，
+    # 游戏读到缺文件的 mod 会直接报错。改为逐项覆盖 + 建目录。
+    New-Item -ItemType Directory -Force -Path (Join-Path $dest 'jars') | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $dest 'data') | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $dest 'graphics') | Out-Null
+
+    Copy-Item (Join-Path $root 'mod_info.json') $dest -Force
+    Copy-Item (Join-Path $root 'README.md') $dest -Force -ErrorAction SilentlyContinue
+    Copy-Item (Join-Path $root 'LICENSE') $dest -Force -ErrorAction SilentlyContinue
+    Copy-Item $jarPath (Join-Path $dest 'jars') -Force
+    Copy-Item (Join-Path $root 'data\*') (Join-Path $dest 'data') -Recurse -Force
+    if (Test-Path (Join-Path $root 'graphics')) {
+        Copy-Item (Join-Path $root 'graphics\*') (Join-Path $dest 'graphics') -Recurse -Force
+    }
+
+    # 部署后自检（含贴图）
+    $need = @(
+        'mod_info.json',
+        'jars\ConsoleFrontend.jar',
+        'data\console\commands.csv',
+        'data\config\settings.json',
+        'data\config\LunaSettings.csv',
+        'data\config\LunaSettingsConfig.json',
+        'data\strings\frontend_labels.json'
+    )
+    foreach ($f in $need) {
         if (-not (Test-Path (Join-Path $dest $f))) { Fail "部署后缺少 $f" }
     }
     Ok "部署完成: $dest"

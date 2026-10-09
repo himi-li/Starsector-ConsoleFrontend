@@ -48,7 +48,9 @@ public class FrontendDialogDelegate extends BaseCustomDialogDelegate {
      */
     @Override
     public String getConfirmText() {
-        return "关闭 (G)";
+        // 游戏会自动在按钮文字后追加 [G] 快捷键提示，
+        // 这里只写动作名，否则会显示成「关闭 (G) [G]」（实测）。
+        return "关闭";
     }
 
     @Override

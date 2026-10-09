@@ -1,5 +1,12 @@
 {
     "plugins": {
         "ConsoleFrontendCombatListener": "org.dsh.frontend.FrontendCombatListener"
+    },
+
+    "graphics": {
+        "ui": {
+            "cf_bg": "graphics/cf_bg.png",
+            "cf_line": "graphics/cf_line.png"
+        }
     }
 }
