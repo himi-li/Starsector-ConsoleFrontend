@@ -39,13 +39,13 @@ every console command gets a clickable button, so you never have to remember com
 ## 安装
 
 1. 确认已安装 **Console Commands 4.0.x**（id: `lw_console`）与 **LazyLib**。
-2. 从本仓库的 **Releases** 页面下载 `ConsoleFrontend-0.1.0.zip` 并解压
-   （仓库本身只保存源码，`jars/*.jar` 属构建产物、不纳入版本控制；从源码构建见下节）。
+2. 从本仓库的 **Releases** 页面下载 `ConsoleFrontend-0.1.0.zip` 并解压。
 3. 把 `ConsoleFrontend` 文件夹放入 `Starsector/mods/`。
 4. 在启动器中启用 **Console Frontend**。
 5. 进入存档后按 `Ctrl + ~` 呼出面板。
 
-从源码构建得到的 `jars/ConsoleFrontend.jar` 与发行包内的 jar 完全一致。
+也可以直接克隆本仓库：仓库内已包含编译好的 `jars/ConsoleFrontend.jar`，与发行包内的 jar 完全一致，
+无需自备 JDK 即可使用（若要自行构建，见下节）。
 
 ## 构建
 
