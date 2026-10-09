@@ -22,3 +22,6 @@ _trash/
 
 # 本机构建路径覆盖（含本机绝对路径，禁止提交）
 .build.local.ps1
+
+# 发行包暂存目录（zip 通过 GitHub Release 分发，不进版本库）
+_release/
