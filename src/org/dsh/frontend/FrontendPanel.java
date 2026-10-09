@@ -430,13 +430,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         try {
             buildHeader(w, h, margin);
-            buildSearchRow(w, h, margin);
-            buildCategoryRow(w, h, margin);
-            float paramsH = buildParamsArea(w, h, margin);
-            buildListArea(w, h, margin, paramsH);
-            buildLogArea(w, h, margin, paramsH);
             if (pickerOpen) {
+                // 选择器独占整个面板：不渲染底层按钮网格 / 参数区 / 日志区。
+                // 这样底层不存在任何可接收事件的控件，鼠标不会【漏】到下面
+                // （原先选择器只是叠在网格之上，底层按钮仍在收事件）。
                 buildPicker(w, h, margin);
+            } else {
+                buildSearchRow(w, h, margin);
+                buildCategoryRow(w, h, margin);
+                float paramsH = buildParamsArea(w, h, margin);
+                buildListArea(w, h, margin, paramsH);
+                buildLogArea(w, h, margin, paramsH);
             }
         } catch (Throwable t) {
             warn("重建面板失败: " + t);
@@ -762,30 +766,42 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     }
 
     private void buildPicker(float w, float h, float margin) {
-        float rowW = Math.min(780f, w - margin * 2f);
-        float areaH = Math.min(520f, h - 200f);
-        float x = (w - rowW) / 2f;
-        float y = Y_CONTENT + 10f;
+        // 独占窗口：铺满面板可用区域（去掉顶部标题行的高度）
+        float rowW = w - margin * 2f;
+        float areaH = Math.max(300f, h - Y_CATEGORY - 16f);
+        float x = margin;
+        float y = Y_CATEGORY;
 
         CustomPanelAPI box = newPanel(rowW, areaH);
-        TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 26f, false);
-        box.addUIElement(tm).inTL(8f, 4f);
+        // 与参数区一致：九宫格背景，避免与底层内容视觉穿透
+        drawPanelBackground(box, rowW, areaH);
+
+        TooltipMakerAPI tm = box.createUIElement(rowW - 24f, 26f, false);
+        box.addUIElement(tm).inTL(12f, 8f);
         tm.setParaFontVictor14();
-        tm.addPara("选择" + IdSource.displayNameOf(pickerSource) + "（名称优先，括号内为 ID）",
-                6f, Misc.getBrightPlayerColor());
+        tm.addPara(escapePercent("选择" + IdSource.displayNameOf(pickerSource)
+                + "（名称优先，括号内为 ID）"), 6f, Misc.getBrightPlayerColor());
 
-        textField(box, 8f, 28f, Math.max(120f, rowW - 300f), 24f, pickerQuery, "picker");
-
+        // 第二行：搜索框（左侧）+ 来源标签（右侧）+ 取消
+        final float row2Y = 40f;
+        final float tabW = 92f;
+        final float tabGap = 6f;
+        final float cancelW = 72f;
         List<String> tabs = IdSource.tabsFor(pickerSource);
-        float tx = rowW - 288f;
+        float rightBlock = tabs.size() * (tabW + tabGap) + cancelW + 12f;
+        float pickFieldW = Math.max(120f, rowW - 24f - rightBlock);
+        textField(box, 12f, row2Y, pickFieldW, 24f, pickerQuery, "picker");
+
+        float tx = 12f + pickFieldW + 12f;
         for (String t : tabs) {
-            ButtonAPI b = button(box, tx, 28f, 84f, 24f, IdSource.displayNameOf(t), "picksrc|" + t, null);
+            ButtonAPI b = button(box, tx, row2Y, tabW, 24f, IdSource.displayNameOf(t),
+                    "picksrc|" + t, null);
             if (t.equals(pickerSource)) {
                 b.setEnabled(false);
             }
-            tx += 88f;
+            tx += tabW + tabGap;
         }
-        button(box, rowW - 80f, 28f, 72f, 24f, "取消", "pickcancel", null);
+        button(box, rowW - cancelW - 12f, row2Y, cancelW, 24f, "取消", "pickcancel", null);
 
         List<IdOption> all = idOptions(pickerSource);
         List<IdOption> filtered = IdSource.filter(all, pickerQuery);
@@ -800,23 +816,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         int from = pickerPage * ps;
         int to = Math.min(filtered.size(), from + ps);
 
-        float listY = 58f;
-        float listH = Math.max(40f, areaH - listY - 34f);
-        CustomPanelAPI listPanel = newPanel(rowW - 16f, listH);
-        TooltipMakerAPI list = listPanel.createUIElement(rowW - 16f, listH, true);
+        float listY = 72f;
+        float listH = Math.max(40f, areaH - listY - 44f);
+        CustomPanelAPI listPanel = newPanel(rowW - 24f, listH);
+        TooltipMakerAPI list = listPanel.createUIElement(rowW - 24f, listH, true);
         listPanel.addUIElement(list).inTL(0f, 0f);
 
-        float lineH = 24f;
-        float innerW = rowW - 40f;
+        float lineH = 26f;
+        float innerW = rowW - 56f;
         for (int i = from; i < to; i++) {
             final IdOption o = filtered.get(i);
             CustomPanelAPI line = newPanel(innerW, lineH);
-            button(line, 0f, 0f, innerW * 0.60f, lineH - 2f, shorten(o.primary(), 44),
+            // 名称按钮占 62%，ID 注释占 36%（名称优先，ID 作注释）
+            float nameW = innerW * 0.62f;
+            button(line, 0f, 0f, nameW, lineH - 2f, shorten(o.primary(), 52),
                     "pick|" + pickerSource + "|" + o.id,
                     escapePercent(o.primary() + "\n" + o.secondary()));
 
-            TooltipMakerAPI idt = line.createUIElement(innerW * 0.38f, lineH, false);
-            line.addUIElement(idt).inTL(innerW * 0.62f, 4f);
+            TooltipMakerAPI idt = line.createUIElement(innerW * 0.36f, lineH, false);
+            line.addUIElement(idt).inTL(nameW + 4f, 5f);
             idt.addPara(escapePercent(o.secondary()), 6f, Misc.getGrayColor());
 
             list.addCustom(line, 2f);
@@ -824,14 +842,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         box.addComponent(listPanel);
         listPanel.getPosition().inTL(8f, listY);
 
-        TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - 200f), 24f, false);
-        box.addUIElement(foot).inTL(8f, areaH - 24f);
+        TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - 220f), 24f, false);
+        box.addUIElement(foot).inTL(12f, areaH - 30f);
         foot.addPara(escapePercent("共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages
                 + " 页（可直接输入名称或 ID，也可滚动 / 搜索）"), 4f, Misc.getGrayColor());
 
         if (pages > 1) {
-            button(box, rowW - 170f, areaH - 26f, 76f, 22f, "上一页", "pickerpage|prev", null);
-            button(box, rowW - 90f, areaH - 26f, 76f, 22f, "下一页", "pickerpage|next", null);
+            button(box, rowW - 186f, areaH - 32f, 84f, 24f, "上一页", "pickerpage|prev", null);
+            button(box, rowW - 96f, areaH - 32f, 84f, 24f, "下一页", "pickerpage|next", null);
         }
 
         place(box, x, y);
