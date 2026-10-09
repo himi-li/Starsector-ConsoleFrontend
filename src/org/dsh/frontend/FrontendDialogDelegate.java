@@ -1,5 +1,6 @@
 package org.dsh.frontend;
 
+import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.campaign.BaseCustomDialogDelegate;
 import com.fs.starfarer.api.campaign.CustomDialogDelegate.CustomDialogCallback;
 import com.fs.starfarer.api.campaign.CustomUIPanelPlugin;
@@ -24,13 +25,23 @@ public class FrontendDialogDelegate extends BaseCustomDialogDelegate {
         this.panel = panel;
     }
 
+    private void log(String msg) {
+        try {
+            Global.getLogger(FrontendDialogDelegate.class).info("[ConsoleFrontend] " + msg);
+        } catch (Throwable ignored) {
+        }
+    }
+
     @Override
     public void createCustomDialog(CustomPanelAPI host, CustomDialogCallback callback) {
         if (host == null) {
             return;
         }
-        // 把宿主面板交给 FrontendPanel，由它在其上构建全部控件
+        // 把宿主面板交给 FrontendPanel，由它在其上构建全部控件。
         panel.attachToDialog(host);
+        // 注入回调：FrontendPanel.close() 用它走确定性关闭路径
+        // （对话框自带的确认按钮只触发 fader 淡入，淡入完成前不会真正关闭）。
+        panel.setDialogCallback(callback);
     }
 
     /** 我们自带了【关闭】按钮，不需要对话框的取消按钮。 */
@@ -60,6 +71,7 @@ public class FrontendDialogDelegate extends BaseCustomDialogDelegate {
 
     @Override
     public void customDialogConfirm() {
+        log("对话框确认回调 customDialogConfirm");
         if (panel != null) {
             panel.close();
         }
@@ -67,6 +79,7 @@ public class FrontendDialogDelegate extends BaseCustomDialogDelegate {
 
     @Override
     public void customDialogCancel() {
+        log("对话框取消回调 customDialogCancel");
         if (panel != null) {
             panel.close();
         }
