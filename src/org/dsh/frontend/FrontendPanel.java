@@ -865,39 +865,34 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         List<IdOption> all = idOptions(pickerSource);
         List<IdOption> filtered = IdSource.filter(all, pickerQuery);
-        // 不再分页：一次性铺出全部条目，靠滚动条 + 鼠标滚轮浏览。
-        // 上限 800 条，避免某些 ID 极多的来源（如全部变体）导致构建过慢。
-        final int maxRows = 800;
-        int total = Math.min(filtered.size(), maxRows);
-        int from = 0;
-        int to = total;
 
         float listY = 82f;
         float listH = Math.max(40f, areaH - listY - 48f);
         // 行高 34：victor16 行高 18（victor14 为 13），行内按钮与 ID 注释都要跟着长高。
         float lineH = 34f;
         float innerW = rowW - 56f;
-        // 内容总高：三条缺一不可，否则游戏不会画出外部滚动条（实测右侧始终空白）。
-        float contentH = Math.max(listH, total * lineH + 8f);
 
-        CustomPanelAPI listPanel = newPanel(rowW - 24f, listH);
-        // 三层结构（照 MEM_ShipPicker.java:180-241 的写法）：
-        //   ① createUIElement(w, h, true) —— true 才申请外部滚动条；
-        //   ② 其中放【一个高度 = 内容总高】的 CustomPanel 并 setSize 撑开；
-        //   ③ 该面板内部再放真正的内容 tooltip。
-        // 之前只做 ① 然后直接 addCustom 一行行内容，内容高==容器高，
-        // 滚动条没有可滚动的余量 → getExternalScroller() 拿得到对象但界面上不显示。
-        TooltipMakerAPI scrollerTooltip = listPanel.createUIElement(rowW - 24f, listH, true);
-        listPanel.addUIElement(scrollerTooltip).inTL(0f, 0f);
-        CustomPanelAPI scrollingPanel = listPanel.createCustomPanel(innerW, contentH, new ChildPlugin());
-        TooltipMakerAPI list = scrollingPanel.createUIElement(innerW, contentH, false);
-        scrollingPanel.addUIElement(list).inTL(0f, 0f);
-        scrollingPanel.getPosition().setSize(innerW, contentH);
-        scrollerTooltip.addCustom(scrollingPanel, 0f).getPosition().inTL(0f, 0f);
-        try {
-            pickerScroller = scrollerTooltip.getExternalScroller();
-        } catch (Throwable ignored) {
+        // ---- 分页（滚动条方案已放弃）----
+        // 试过两轮"内容面板撑到总高 + createUIElement(...,true)"的三层结构
+        // （官方范例 MEM_ShipPicker 的写法），界面上始终不出现滚动条。
+        // 现在改回分页：每页行数【用整除算】，保证最后一行完整——
+        // 若按 listH/lineH 直接取整之外再多放一行，那行会只露出半截（用户明确要求避免）。
+        int perPage = Math.max(1, (int) (listH / lineH));
+        int pages = Math.max(1, (int) Math.ceil(filtered.size() / (double) perPage));
+        if (pickerPage >= pages) {
+            pickerPage = pages - 1;
         }
+        if (pickerPage < 0) {
+            pickerPage = 0;
+        }
+        int from = pickerPage * perPage;
+        int to = Math.min(filtered.size(), from + perPage);
+
+        // 行数与行高都不再需要留滚动余量，容器高度就等于本页实际高度。
+        float pageH = Math.max(lineH, (to - from) * lineH);
+        CustomPanelAPI listPanel = newPanel(rowW - 24f, pageH);
+        TooltipMakerAPI list = listPanel.createUIElement(rowW - 24f, pageH, false);
+        listPanel.addUIElement(list).inTL(0f, 0f);
         for (int i = from; i < to; i++) {
             final IdOption o = filtered.get(i);
             CustomPanelAPI line = newPanel(innerW, lineH);
@@ -918,18 +913,22 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             } catch (Throwable ignored) {
             }
 
-            list.addCustom(line, 2f);
+            // pad 0：行高严格等于 lineH，perPage 的整除计算才成立（多一行就会露半截）。
+            list.addCustom(line, 0f);
         }
         box.addComponent(listPanel);
         listPanel.getPosition().inTL(8f, listY);
 
-        TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - 220f), 28f, false);
+        // 翻页按钮放在页脚右侧，与页脚同一基线
+        float pgW = 80f;
+        float pgGap = 6f;
+        button(box, rowW - (pgW * 2f + pgGap) - 12f, areaH - 36f, pgW, 26f, "上一页", "pickerpage|prev", null);
+        button(box, rowW - pgW - 12f, areaH - 36f, pgW, 26f, "下一页", "pickerpage|next", null);
+
+        TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - (pgW * 2f + pgGap) - 60f), 28f, false);
         box.addUIElement(foot).inTL(12f, areaH - 36f);
-        String footText = "共 " + filtered.size() + " 项";
-        if (filtered.size() > total) {
-            footText += "（显示前 " + total + " 项，请用搜索缩小范围）";
-        }
-        footText += " · 可直接输入名称或 ID，或用滚轮 / 右侧滚动条浏览";
+        String footText = "共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages + " 页（每页 " + perPage + " 项）";
+        footText += " · 可直接输入名称或 ID 搜索";
         foot.addPara(escapePercent(footText), 5f, Misc.getGrayColor());
 
         place(box, x, y);
@@ -1179,10 +1178,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 if (e.isKeyboardEvent()) {
                     continue;
                 }
-                // 4) 滚轮：选择器打开时用来滚动列表；其余情况吞掉，避免滚到战役/战斗 UI。
+                // 4) 滚轮：选择器打开时翻页（一格一页）；其余情况吞掉，避免滚到战役/战斗 UI。
                 if (e.isMouseScrollEvent()) {
                     if (pickerOpen) {
-                        scrollPicker(e.getEventValue());
+                        pickerScroll(e.getEventValue());
                     }
                     e.consume();
                 }
@@ -1191,32 +1190,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
     }
 
-    /** 选择器列表的滚动条（由 createUIElement(...,true) 自动提供）。 */
-    private ScrollPanelAPI pickerScroller;
-
     /**
-     * 滚轮滚动选择器列表。
+     * 滚轮翻页。
      *
-     * <p>只取滚动<b>方向</b>，不直接拿事件值当像素量：不同平台/驱动下
-     * {@code getEventValue()} 可能是 ±1（格子数）也可能是 ±120（LWJGL 的
-     * {@code Mouse.getEventDWheel()} 风格）。若按 120 倍算，滚一格会跳 4800px
-     * （直接冲到列表底部），所以这里统一归一化成 ±1 再乘固定步长。
+     * <p>早先版本把滚轮做成像素级滚动（{@code setYOffset}），但
+     * {@code InputEventAPI.getEventValue()} 的量纲在各平台/驱动下不一致，
+     * 归一化成 ±1 再乘步长后实测"滚一格页面直接空白"——用户连报两轮"非常非常快"。
+     * 既然已改回分页，滚轮就直接等价于【翻一页】，一格一页，速度天然可控。
+     * 上下界由 {@link #buildPicker} 钳位（pickerPage 越界会被夹回来）。
      */
-    private void scrollPicker(int wheelDelta) {
-        if (pickerScroller == null || wheelDelta == 0) {
+    private void pickerScroll(int wheelDelta) {
+        if (wheelDelta == 0) {
             return;
         }
-        try {
-            int dir = wheelDelta > 0 ? 1 : -1;
-            float cur = pickerScroller.getYOffset();
-            // 滚轮向上（正值）→ 内容上移（offset 减小）
-            float next = cur - dir * 40f;
-            if (next < 0f) {
-                next = 0f;
-            }
-            pickerScroller.setYOffset(next);
-        } catch (Throwable ignored) {
+        // 上滚（正值）= 往前翻
+        pickerPage += wheelDelta > 0 ? -1 : 1;
+        if (pickerPage < 0) {
+            pickerPage = 0;
         }
+        needsRebuild = true;
     }
 
     /** 找出事件落点所在的输入框 key。 */
