@@ -1,0 +1,15 @@
+# 统一换行符，避免不同平台上的无意义 diff
+* text=auto eol=lf
+
+# Windows 脚本保留 CRLF，便于直接双击运行
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+
+# 二进制
+*.jar binary
+*.png binary
+*.ogg binary
+
+# 这些数据文件必须保持 LF，避免游戏端读取差异
+*.csv text eol=lf
+*.json text eol=lf
