@@ -920,8 +920,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      */
     private void drawPanelBackground(CustomPanelAPI host, float w, float h) {
         try {
-            String fill = Global.getSettings().getSpriteName("ui", "cf_bg");
-            String line = Global.getSettings().getSpriteName("ui", "cf_line");
+            // 优先用注册名解析；失败时退化为字面路径（addImage 也接受路径）
+            String fill = resolveSprite("cf_bg", "graphics/cf_bg.png");
+            String line = resolveSprite("cf_line", "graphics/cf_line.png");
 
             // 底色：铺满
             TooltipMakerAPI bg = host.createUIElement(w, h, false);
@@ -937,6 +938,18 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         } catch (Throwable t) {
             warn("绘制面板背景失败: " + t);
         }
+    }
+
+    /** 解析贴图名：先查 settings.json 的 graphics.ui 注册，失败则用字面路径。 */
+    private static String resolveSprite(String key, String fallback) {
+        try {
+            String s = Global.getSettings().getSpriteName("ui", key);
+            if (s != null && !s.isEmpty()) {
+                return s;
+            }
+        } catch (Throwable ignored) {
+        }
+        return fallback;
     }
 
     /** 在指定位置画一张贴图（各自独立容器，避免顺序堆叠）。 */
