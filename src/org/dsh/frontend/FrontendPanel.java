@@ -111,6 +111,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private boolean needsRebuild;
     private String statusLine = "";
 
+    /**
+     * 日志区的滚动器。
+     *
+     * <p>不在 buildLogArea 里直接设偏移，是因为正确偏移要等内容完成布局才有意义；
+     * 改由 {@link #advance(float)} 每帧把日志滚到底（{@link #scrollLogToBottom()}）。
+     */
+    private ScrollPanelAPI logScroller;
+
+    /** 日志滚动器是否支持 {@code scrollToBottom()}（需经反射调用，见 buildLogArea 注释）。 */
+    private boolean logScrollToBottom;
+
     // ---- 纵向布局常量（自上而下，单位像素）----
     //
     // 注意：原版 TextFieldAPI 的<b>实际渲染高度大于请求高度</b>——
@@ -470,6 +481,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         lastFieldText.clear();
         interactive.clear();
         previewLabel = null;
+        logScroller = null;
+        logScrollToBottom = false;
         focusedField = null;
 
         float w = bgPanel.getPosition().getWidth();
@@ -808,10 +821,24 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         area.addUIElement(log).inTL(8f, 40f);
         log.setParaFont(FONT_PARA);
         log.addPara(escapePercent(tail.isEmpty() ? "（暂无输出）" : tail), 6f, Misc.getTextColor());
+        // 只记录滚动器，滚动动作交给 advance() 每帧执行。
+        //
+        // 【重要】绝不能写成 sc.setYOffset(Float.MAX_VALUE)：
+        // ScrollPanelAPI.setYOffset(float) 的实现（com.fs.starfarer.ui.g，字节码确认）是
+        //   putfield yOffset; g$Oo.forceOffset(xOffset, yOffset);
+        // 而 forceOffset 又把该值原样写进内容容器的 position.setOffset(...)，【全程没有任何钳位】。
+        // 于是内容被推到无穷远，整个滚动区连占位文字一起消失
+        // （实测：日志区标题在、正文全空白，连「（暂无输出）」都画不出来）。
+        //
+        // 正确做法是调具体滚动实现上的 scrollToBottom()：它按
+        //   yOffset = 内容高 - 视口高，且视口高 > 内容高时取 0
+        // 自行钳位（字节码确认）。但该方法只在 ScrollPanelAPI 的实现类上，
+        // 接口里没有，因此只能经反射调用。
         try {
             ScrollPanelAPI sc = log.getExternalScroller();
             if (sc != null) {
-                sc.setYOffset(Float.MAX_VALUE);
+                logScroller = sc;
+                logScrollToBottom = Reflect.hasMethodOfName(sc, "scrollToBottom");
             }
         } catch (Throwable ignored) {
         }
@@ -1465,6 +1492,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     needsRebuild = false;
                     rebuild();
                 }
+                scrollLogToBottom();
                 return;
             }
             GameState st = Global.getCurrentState();
@@ -1489,6 +1517,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 needsRebuild = false;
                 rebuild();
             }
+            scrollLogToBottom();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 把日志区滚到底部（显示最新输出）。
+     *
+     * <p>必须每帧调用而非只在重建时调用：内容高度要等游戏完成一次布局才有效，
+     * 重建当帧拿到的往往是 0，滚到底会退化成停在顶部；逐帧调用可以自愈。
+     * 这里不用 {@code setYOffset}（不钳位，会把内容推飞），只用带钳位的
+     * {@code scrollToBottom()}；不支持该方法的滚动器就保持不动。
+     */
+    private void scrollLogToBottom() {
+        if (logScroller == null || !logScrollToBottom || pickerOpen) {
+            return;
+        }
+        try {
+            Reflect.invoke(logScroller, "scrollToBottom");
         } catch (Throwable ignored) {
         }
     }
