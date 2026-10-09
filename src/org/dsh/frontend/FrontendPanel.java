@@ -119,14 +119,15 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     private static final float Y_SEARCH = 46f;
     private static final float H_SEARCH = 34f;
-    /** 搜索框请求高度（实际渲染更高，故下一行要按 40px 预留）。 */
-    private static final float H_SEARCH_FIELD = 24f;
+    /** 搜索框请求高度（实际渲染高度约为请求值 +20，故下一行要按 44px 预留）。 */
+    private static final float H_SEARCH_FIELD = 22f;
 
-    private static final float Y_CATEGORY = 100f;
+    /** 标签行的 y：必须 ≥ Y_SEARCH + 44，实测取 104 时仍有轻微接触，故留到 108。 */
+    private static final float Y_CATEGORY = 108f;
     private static final float H_CATEGORY = 30f;
 
     /** 参数区 / 按钮列表区的起始 y。 */
-    private static final float Y_CONTENT = 145f;
+    private static final float Y_CONTENT = 152f;
 
     private float lastW;
     private float lastH;
@@ -411,6 +412,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
         bgPanel.getPosition().inTL(mountedInDialog ? 0f : (fullW - contentW) / 2f, mountedInDialog ? 0f : 30f);
 
+        // 记住当前聚焦的字段：重建后要恢复它。
+        // 若这里清成 null，则「按键 → 重建 → 失焦」会让玩家每次只能输入一个字符（实测问题）。
+        final String keepFocus = focusedField;
+
         clearPanel(bgPanel);
         fields.clear();
         lastFieldText.clear();
@@ -434,6 +439,20 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             }
         } catch (Throwable t) {
             warn("重建面板失败: " + t);
+        }
+
+        // 恢复重建前的聚焦字段（对应的新 TextFieldAPI 实例），
+        // 否则「按键 → 重建 → 失焦」会让玩家每按一次键就要重新点一次输入框。
+        if (keepFocus != null && fields.containsKey(keepFocus)) {
+            focusedField = keepFocus;
+            try {
+                TextFieldAPI f = fields.get(keepFocus);
+                if (f != null) {
+                    f.setText(lastFieldText.get(keepFocus) == null ? "" : lastFieldText.get(keepFocus));
+                    f.showCursor();
+                }
+            } catch (Throwable ignored) {
+            }
         }
     }
 
@@ -474,17 +493,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float rowW = w - margin * 2f;
         CustomPanelAPI row = newPanel(rowW, H_SEARCH);
 
-        TooltipMakerAPI tm = row.createUIElement(44f, H_SEARCH, false);
-        row.addUIElement(tm).inTL(0f, 10f);
+        TooltipMakerAPI tm = row.createUIElement(44f, 20f, false);
+        row.addUIElement(tm).inTL(0f, 8f);
         tm.addPara("搜索", 6f, Misc.getGrayColor());
 
         // 右侧两个按钮各 112 宽，从 rowW-240 与 rowW-122 起；
         // 输入框必须在其左侧留出间隙（这里留 12px），否则会横向压到按钮上。
         float fieldW = Math.max(120f, rowW - 44f - 250f - 12f);
-        textField(row, 44f, 2f, fieldW, H_SEARCH_FIELD, query, "search");
+        textField(row, 44f, 0f, fieldW, H_SEARCH_FIELD, query, "search");
 
-        button(row, rowW - 240f, 0f, 112f, 24f, "刷新目录", "refresh", "重新读取全部命令与 ID 列表");
-        button(row, rowW - 122f, 0f, 112f, 24f, "清空搜索", "clearsearch", null);
+        button(row, rowW - 240f, 0f, 112f, 22f, "刷新目录", "refresh", "重新读取全部命令与 ID 列表");
+        button(row, rowW - 122f, 0f, 112f, 22f, "清空搜索", "clearsearch", null);
         place(row, margin, Y_SEARCH);
     }
 
@@ -509,7 +528,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float x = 0f;
         for (String id : cats) {
             String name = "all".equals(id) ? "全部" : categoryName(id);
-            ButtonAPI b = button(row, x, 0f, bw, H_CATEGORY - 4f, name, "tab|" + id, null);
+            ButtonAPI b = button(row, x, 0f, bw, H_CATEGORY - 6f, name, "tab|" + id, null);
             if (id.equals(category)) {
                 b.setEnabled(false);
             }
@@ -543,14 +562,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 26f, false);
         box.addUIElement(tm).inTL(8f, 4f);
         tm.setParaFontVictor14();
-        tm.addPara("参数设置 · " + e.labelOrName(), 6f, Misc.getBrightPlayerColor());
+        tm.addPara(escapePercent("参数设置 · " + e.labelOrName()), 6f, Misc.getBrightPlayerColor());
 
         float fy = 26f;
         for (ParamSpec p : e.params) {
             float labelW = 130f;
             TooltipMakerAPI lt = box.createUIElement(labelW, lineH, false);
             box.addUIElement(lt).inTL(8f, fy + 6f);
-            lt.addPara(p.labelOrKey() + (p.required ? " *" : ""), 6f,
+            lt.addPara(escapePercent(p.labelOrKey() + (p.required ? " *" : "")), 6f,
                     p.required ? Misc.getHighlightColor() : Misc.getGrayColor());
 
             String key = fieldKey(e.command, p.key);
@@ -563,7 +582,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 textField(box, ctlX, fy + 2f, pickW, 24f, val, key);
                 button(box, ctlX + pickW + 4f, fy + 2f, 28f, 24f, "▼",
                         "pickopen|" + e.command + "|" + p.key,
-                        "打开" + IdSource.displayNameOf(p.source) + "选择器（可搜索，名称优先）");
+                        escapePercent("打开" + IdSource.displayNameOf(p.source) + "选择器（可搜索，名称优先）"));
             } else if (p.isNumeric()) {
                 float stepW = 28f;
                 float fw = Math.max(80f, ctlW - (stepW + 4f) * 2f - 4f);
@@ -583,7 +602,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             if (p.hint != null && !p.hint.isEmpty()) {
                 TooltipMakerAPI ht = box.createUIElement(200f, lineH, false);
                 box.addUIElement(ht).inTL(rowW - 208f, fy + 6f);
-                ht.addPara(p.hint, 6f, Misc.getGrayColor());
+                ht.addPara(escapePercent(p.hint), 6f, Misc.getGrayColor());
             }
             fy += lineH;
         }
@@ -596,7 +615,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         TooltipMakerAPI pv = box.createUIElement(Math.max(120f, rowW - 400f), lineH, false);
         box.addUIElement(pv).inTL(8f, fy + 6f);
-        previewLabel = pv.addPara(previewText(e), 6f, Misc.getHighlightColor());
+        previewLabel = pv.addPara(escapePercent(previewText(e)), 6f, Misc.getHighlightColor());
 
         button(box, rowW - 300f, fy + 2f, 90f, 24f, "执行", "run|" + e.command, "用当前参数执行一次");
         button(box, rowW - 204f, fy + 2f, 100f, 24f, "恢复默认", "reset|" + e.command, "清除该命令已记住的参数");
@@ -647,13 +666,13 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 float mainW = cellW - editW - (hasEdit ? 3f : 0f);
 
                 ButtonAPI main = button(rowPanel, cx, 0f, mainW, FrontendSettings.buttonHeight,
-                        e.labelOrName(), "cmd|" + e.command, e.describe());
+                        e.labelOrName(), "cmd|" + e.command, escapePercent(e.describe()));
                 if (!e.applicable) {
                     main.setEnabled(false);
                 }
                 if (hasEdit) {
                     button(rowPanel, cx + mainW + 3f, 0f, editW, FrontendSettings.buttonHeight, "⚙",
-                            "edit|" + e.command, "调整「" + e.labelOrName() + "」的参数");
+                            "edit|" + e.command, escapePercent("调整「" + e.labelOrName() + "」的参数"));
                 }
             }
             content.addCustom(rowPanel, 4f);
@@ -665,7 +684,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         if (statusLine != null && !statusLine.isEmpty()) {
             info = statusLine + "    " + info;
         }
-        footer.addPara(info, 6f, Misc.getGrayColor());
+        footer.addPara(escapePercent(info), 6f, Misc.getGrayColor());
 
         if (pages > 1) {
             button(area, rowW - 260f, areaH - 26f, 80f, 22f, "上一页", "page|prev", null);
@@ -699,7 +718,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         String tail = tailLines(out, FrontendSettings.logLines);
         TooltipMakerAPI log = area.createUIElement(rowW - 16f, areaH - 36f, true);
         area.addUIElement(log).inTL(8f, 32f);
-        log.addPara(tail.isEmpty() ? "（暂无输出）" : tail, 4f, Misc.getTextColor());
+        log.addPara(escapePercent(tail.isEmpty() ? "（暂无输出）" : tail), 4f, Misc.getTextColor());
         try {
             ScrollPanelAPI sc = log.getExternalScroller();
             if (sc != null) {
@@ -762,11 +781,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             final IdOption o = filtered.get(i);
             CustomPanelAPI line = newPanel(innerW, lineH);
             button(line, 0f, 0f, innerW * 0.60f, lineH - 2f, shorten(o.primary(), 44),
-                    "pick|" + pickerSource + "|" + o.id, o.primary() + "\n" + o.secondary());
+                    "pick|" + pickerSource + "|" + o.id,
+                    escapePercent(o.primary() + "\n" + o.secondary()));
 
             TooltipMakerAPI idt = line.createUIElement(innerW * 0.38f, lineH, false);
             line.addUIElement(idt).inTL(innerW * 0.62f, 4f);
-            idt.addPara(o.secondary(), 6f, Misc.getGrayColor());
+            idt.addPara(escapePercent(o.secondary()), 6f, Misc.getGrayColor());
 
             list.addCustom(line, 2f);
         }
@@ -775,8 +795,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - 200f), 24f, false);
         box.addUIElement(foot).inTL(8f, areaH - 24f);
-        foot.addPara("共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages
-                + " 页（可直接输入名称或 ID，也可滚动 / 搜索）", 4f, Misc.getGrayColor());
+        foot.addPara(escapePercent("共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages
+                + " 页（可直接输入名称或 ID，也可滚动 / 搜索）"), 4f, Misc.getGrayColor());
 
         if (pages > 1) {
             button(box, rowW - 170f, areaH - 26f, 76f, 22f, "上一页", "pickerpage|prev", null);
@@ -860,7 +880,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
                 @Override
                 public void createTooltip(TooltipMakerAPI tooltip, boolean expanded, Object tooltipParam) {
-                    tooltip.addPara(body, 6f, Misc.getTextColor());
+                    // addPara 内部会走 String.format，正文里的 '%' 会被当成格式符，
+                    // 触发 UnknownFormatConversionException（实测闪退：Conversion = ' '，
+                    // 来自 desc「补到约 50% 载货量」）。这里统一转义为 %%。
+                    tooltip.addPara(escapePercent(body), 6f, Misc.getTextColor());
                 }
             }, TooltipMakerAPI.TooltipLocation.BELOW);
         }
@@ -1070,7 +1093,18 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             }
             boolean ok = false;
             try {
-                ok = f.isValidChar(c) && f.appendCharIfPossible(c);
+                // 不再用 isValidChar 做白名单：它会挡掉中文字符（实测搜索栏无法输入中文），
+                // 而游戏字体已含 CJK 字形，中文完全可以显示。
+                // 这里只排除控制字符，其余交给 appendCharIfPossible。
+                if (c >= 0x20 && c != 0x7F) {
+                    ok = f.appendCharIfPossible(c);
+                    if (!ok) {
+                        // 某些版本对非 ASCII 返回 false，退化为直接 setText 拼接
+                        String cur = f.getText();
+                        f.setText((cur == null ? "" : cur) + c);
+                        ok = true;
+                    }
+                }
             } catch (Throwable ignored) {
                 ok = false;
             }
@@ -1213,7 +1247,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         try {
             CatalogEntry e = catalog.byCommand(command);
             if (e != null) {
-                previewLabel.setText(previewText(e));
+                previewLabel.setText(escapePercent(previewText(e)));
             }
         } catch (Throwable ignored) {
         }
@@ -1720,6 +1754,22 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             sb.append(lines[i]);
         }
         return sb.toString();
+    }
+
+    /**
+     * 转义文本里的 '%'。
+     *
+     * <p>游戏 UI 的 {@code addPara(String, float, Color)} 内部使用
+     * {@code String.format}，正文中未配对的 '%' 会抛
+     * {@code UnknownFormatConversionException} 并导致游戏闪退
+     * （实测：desc「补到约 50% 载货量」触发 Conversion = ' '）。
+     * 所有来自数据文件 / 命令帮助 / ID 名称的动态文本都必须先过这里。
+     */
+    static String escapePercent(String s) {
+        if (s == null || s.indexOf('%') < 0) {
+            return s;
+        }
+        return s.replace("%", "%%");
     }
 
     private static String shorten(String s, int max) {
