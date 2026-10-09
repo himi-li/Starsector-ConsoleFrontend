@@ -30,10 +30,20 @@ public class CatalogEntry {
         return hasParams();
     }
 
+    /**
+     * 按钮显示文本。
+     *
+     * <p>当设置项 {@code cf_useEnglishLabels} 打开时（未安装中文字体、中文显示为方块），
+     * 一律回退为命令名本身，避免出现乱码按钮。
+     */
     public String labelOrName() {
+        if (FrontendSettings.useEnglishLabels) {
+            return displayName == null || displayName.isEmpty() ? command : displayName;
+        }
         return label == null || label.isEmpty() ? displayName : label;
     }
 
+    /** 按钮悬浮提示：中文说明 + 语法 + 来源 Mod。 */
     public String describe() {
         StringBuilder sb = new StringBuilder();
         if (description != null && !description.isEmpty()) {
@@ -51,13 +61,22 @@ public class CatalogEntry {
             }
             sb.append("来源: ").append(source);
         }
+        if (sb.length() == 0) {
+            sb.append("执行命令 ").append(command);
+        }
         return sb.toString();
     }
 
+    /** 供搜索框使用的匹配文本（中英文与 ID 都能命中）。 */
     public String searchBlob() {
         StringBuilder sb = new StringBuilder();
         sb.append(command == null ? "" : command.toLowerCase());
-        sb.append(' ').append(labelOrName().toLowerCase());
+        if (label != null) {
+            sb.append(' ').append(label.toLowerCase());
+        }
+        if (displayName != null) {
+            sb.append(' ').append(displayName.toLowerCase());
+        }
         if (description != null) {
             sb.append(' ').append(description.toLowerCase());
         }

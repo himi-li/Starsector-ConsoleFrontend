@@ -2,6 +2,7 @@ package org.dsh.frontend;
 
 import com.fs.starfarer.api.GameState;
 import com.fs.starfarer.api.Global;
+import com.fs.starfarer.api.Script;
 import com.fs.starfarer.api.campaign.BaseCustomUIPanelPlugin;
 import com.fs.starfarer.api.campaign.CampaignUIAPI;
 import com.fs.starfarer.api.campaign.InteractionDialogAPI;
@@ -39,13 +40,16 @@ import java.util.Map;
  * <p>带参数的命令支持自定义参数并记住（{@link ParamStore}）；ID 类参数提供
  * 「游戏内名称优先、ID 作为注释」的可搜索下拉选择器，同时允许直接输入。
  *
- * <p>实现要点（对照已装 Mod 的可用写法）：
- * <ul>
+ * <p>三个关键实现约束（均来自对已装 Mod 与 Console Commands 源码的核对）：
+ * <ol>
  *   <li>覆盖层通过反射挂到 {@code screenPanel} 上（与 Console Commands 的 V2 面板同路线）。</li>
- *   <li>只有主面板使用本插件；子面板使用 {@link ChildPlugin}，它把 buttonPressed 转发回来但
- *       不参与渲染 —— 否则全屏遮罩会被每个子面板重复绘制，互相覆盖。</li>
- *   <li>控件先 addUIElement 挂到面板、再 addButton/addTextField，确保按钮的监听器能找到宿主面板。</li>
- * </ul>
+ *   <li>只有主面板使用本插件；子面板使用 {@link ChildPlugin}，它把 buttonPressed/processInput
+ *       转发回来但不参与渲染 —— 否则全屏遮罩会被每个子面板重复绘制、互相覆盖。</li>
+ *   <li>控件先 addUIElement 挂到面板、再 addButton/addTextField，确保按钮监听器能找到宿主面板。</li>
+ *   <li><b>不使用</b>原生 TextField 的焦点机制：原版 TextField 一旦获得焦点就会吞掉所有按键
+ *       （含 ESC），见 RefitFilters/SearchBarFilterPanel.kt:62-65。改为自行记录聚焦字段并
+ *       在 processInput 中转发按键（{@link #forwardKey}），ESC 始终优先。</li>
+ * </ol>
  */
 public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
@@ -59,7 +63,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return instance != null;
     }
 
-    /** 子面板插件：转发按钮事件，但不渲染（避免全屏遮罩重复绘制）。 */
+    /** 子面板插件：转发按钮/输入事件，但不渲染（避免全屏遮罩重复绘制）。 */
     private class ChildPlugin extends BaseCustomUIPanelPlugin {
         @Override
         public void buttonPressed(Object buttonId) {
@@ -103,6 +107,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private LabelAPI previewLabel;
     private boolean needsRebuild;
     private String statusLine = "";
+
+    private float lastW;
+    private float lastH;
+    /** 当前正在编辑的输入框 key（不依赖原生焦点机制，见 {@link #forwardKey}）。 */
+    private String focusedField;
 
     private FrontendPanel(CommandContext ctx) {
         this.context = ctx;
@@ -178,7 +187,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         UIPanelAPI sp = (UIPanelAPI) screenPanel;
         float w = sp.getPosition() == null ? Global.getSettings().getScreenWidth() : sp.getPosition().getWidth();
         float h = sp.getPosition() == null ? Global.getSettings().getScreenHeight() : sp.getPosition().getHeight();
+        lastW = w;
+        lastH = h;
 
+        // 父面板始终占满 screenPanel，便于居中定位；真正的内容宽度由 bgPanel 按设置决定
         parent = Global.getSettings().createCustom(w, h, null);
         sp.addComponent(parent);
         parent.getPosition().inTL(0f, 0f);
@@ -231,20 +243,28 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         if (parent == null) {
             return;
         }
+        float fullW = parent.getPosition().getWidth();
+        float fullH = parent.getPosition().getHeight();
+        float contentW = (float) (fullW * clampFraction(FrontendSettings.panelWidthFraction));
+        float contentH = Math.max(200f, fullH - 60f);
         if (bgPanel == null) {
-            bgPanel = parent.createCustomPanel(parent.getPosition().getWidth(), parent.getPosition().getHeight(), this);
+            bgPanel = parent.createCustomPanel(contentW, contentH, this);
             parent.addComponent(bgPanel);
-            bgPanel.getPosition().inTL(0f, 0f);
+        } else {
+            bgPanel.getPosition().setSize(contentW, contentH);
         }
+        bgPanel.getPosition().inTL((fullW - contentW) / 2f, 30f);
+
         clearPanel(bgPanel);
         fields.clear();
         lastFieldText.clear();
         interactive.clear();
         previewLabel = null;
+        focusedField = null;
 
         float w = bgPanel.getPosition().getWidth();
         float h = bgPanel.getPosition().getHeight();
-        float margin = 40f;
+        float margin = 20f;
 
         try {
             buildHeader(w, h, margin);
@@ -391,8 +411,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 float stepW = 28f;
                 float fw = Math.max(80f, ctlW - (stepW + 4f) * 2f - 4f);
                 textField(box, ctlX, fy + 2f, fw, 24f, val, key);
-                button(box, ctlX + fw + 4f, fy + 2f, stepW, 24f, "-", "pstep|" + e.command + "|" + p.key + "|dec", "减少");
-                button(box, ctlX + fw + stepW + 8f, fy + 2f, stepW, 24f, "+", "pstep|" + e.command + "|" + p.key + "|inc", "增加");
+                button(box, ctlX + fw + 4f, fy + 2f, stepW, 24f, "-",
+                        "pstep|" + e.command + "|" + p.key + "|dec", "减少");
+                button(box, ctlX + fw + stepW + 8f, fy + 2f, stepW, 24f, "+",
+                        "pstep|" + e.command + "|" + p.key + "|inc", "增加");
             } else if (ParamSpec.TYPE_BOOL.equals(p.type)) {
                 boolean on = isOn(val);
                 button(box, ctlX, fy + 2f, 120f, 24f, on ? "开 (ON)" : "关 (OFF)",
@@ -542,7 +564,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 26f, false);
         box.addUIElement(tm).inTL(8f, 4f);
         tm.setParaFontVictor14();
-        tm.addPara("选择" + IdSource.displayNameOf(pickerSource) + "（名称优先，括号内为 ID）", 6f, Misc.getBrightPlayerColor());
+        tm.addPara("选择" + IdSource.displayNameOf(pickerSource) + "（名称优先，括号内为 ID）",
+                6f, Misc.getBrightPlayerColor());
 
         textField(box, 8f, 28f, Math.max(120f, rowW - 300f), 24f, pickerQuery, "picker");
 
@@ -590,7 +613,6 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
             list.addCustom(line, 2f);
         }
-
         box.addComponent(listPanel);
         listPanel.getPosition().inTL(8f, listY);
 
@@ -608,6 +630,40 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     }
 
     // ================= 控件工厂 =================
+
+    private static double clampFraction(double v) {
+        if (v < 0.4) {
+            return 0.4;
+        }
+        return v > 1.0 ? 1.0 : v;
+    }
+
+    /** 屏幕尺寸变化（切换分辨率 / 窗口化）时重新定位内容面板并重建。 */
+    private void resize() {
+        try {
+            if (parent == null) {
+                return;
+            }
+            float w = Global.getSettings().getScreenWidth();
+            float h = Global.getSettings().getScreenHeight();
+            Object spPos = Reflect.invoke(
+                    Reflect.invoke(AppDriver.getInstance().getCurrentState(), "getScreenPanel"), "getPosition");
+            if (spPos instanceof PositionAPI) {
+                w = ((PositionAPI) spPos).getWidth();
+                h = ((PositionAPI) spPos).getHeight();
+            }
+            parent.getPosition().setSize(w, h);
+            parent.getPosition().inTL(0f, 0f);
+            if (bgPanel != null) {
+                float contentW = (float) (w * clampFraction(FrontendSettings.panelWidthFraction));
+                float contentH = Math.max(200f, h - 60f);
+                bgPanel.getPosition().setSize(contentW, contentH);
+                bgPanel.getPosition().inTL((w - contentW) / 2f, 30f);
+            }
+            rebuild();
+        } catch (Throwable ignored) {
+        }
+    }
 
     private CustomPanelAPI newPanel(float w, float h) {
         return bgPanel.createCustomPanel(Math.max(1f, w), Math.max(1f, h), new ChildPlugin());
@@ -665,6 +721,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         if (initial != null && !initial.isEmpty()) {
             f.setText(initial);
         }
+        f.setMaxChars(200);
         interactive.add(f);
         fields.put(key, f);
         lastFieldText.put(key, initial == null ? "" : initial);
@@ -673,44 +730,221 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     // ================= 输入 =================
 
+    /**
+     * 输入处理。
+     *
+     * <p>刻意<b>不</b>使用原生 TextFieldAPI 的焦点机制：原版 TextField 一旦 grabFocus()
+     * 就会吞掉所有按键（包括 ESC），既无法关闭面板，也会让热键失效
+     * （RefitFilters 的 SearchBarFilterPanel.kt:62-65 对此有明确注释）。
+     * 这里改为自行记录「当前聚焦字段」，把按键转发给它，ESC 始终优先处理。
+     */
     @Override
     public void processInput(List<InputEventAPI> events) {
         if (events == null || parent == null) {
             return;
         }
         try {
-            boolean fieldFocused = false;
-            for (TextFieldAPI f : fields.values()) {
-                try {
-                    if (f != null && f.hasFocus()) {
-                        fieldFocused = true;
-                        break;
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
             for (InputEventAPI e : events) {
                 if (e == null || e.isConsumed()) {
                     continue;
                 }
+                // 1) ESC 永远优先
                 if (e.isKeyDownEvent() && e.getEventValue() == Keyboard.KEY_ESCAPE) {
                     e.consume();
                     onEscape();
                     return;
                 }
-                // 输入框获得焦点时，键盘事件交给它
-                if (fieldFocused && e.isKeyboardEvent()) {
+                // 2) 鼠标按下：落在输入框上则聚焦；落在按钮上则先提交并取消聚焦
+                if (e.isMouseDownEvent() || e.isLMBDownEvent()) {
+                    String hit = fieldAt(e);
+                    if (hit != null) {
+                        setFocus(hit);
+                        e.consume();
+                    } else {
+                        if (focusedField != null) {
+                            commitFocused();
+                            setFocus(null);
+                        }
+                        if (!insideAnyElement(e)) {
+                            e.consume();
+                        }
+                    }
                     continue;
                 }
+                // 3) 键盘事件转发给聚焦字段；无聚焦时一律吞掉，防止穿透到战役/战斗 UI
                 if (e.isKeyboardEvent()) {
-                    e.consume();
+                    if (focusedField != null && forwardKey(e)) {
+                        e.consume();
+                    } else if (focusedField == null) {
+                        e.consume();
+                    }
                     continue;
                 }
-                // 鼠标事件：落点不在任何按钮/输入框上就吞掉，避免点穿到战役/战斗 UI
+                // 4) 其它鼠标事件（移动 / 滚轮）：不在控件上就吞掉
                 if (e.isMouseEvent() && !insideAnyElement(e)) {
                     e.consume();
                 }
             }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 找出事件落点所在的输入框 key。 */
+    private String fieldAt(InputEventAPI e) {
+        for (Map.Entry<String, TextFieldAPI> en : fields.entrySet()) {
+            TextFieldAPI f = en.getValue();
+            if (f == null) {
+                continue;
+            }
+            try {
+                PositionAPI p = f.getPosition();
+                if (p != null && p.containsEvent(e)) {
+                    return en.getKey();
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return null;
+    }
+
+    private void setFocus(String key) {
+        if (focusedField != null && !focusedField.equals(key)) {
+            commitFocused();
+        }
+        focusedField = key;
+        try {
+            if (key != null) {
+                TextFieldAPI f = fields.get(key);
+                if (f != null) {
+                    f.showCursor();
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 把聚焦字段的内容写回面板状态。 */
+    private void commitFocused() {
+        if (focusedField == null) {
+            return;
+        }
+        TextFieldAPI f = fields.get(focusedField);
+        if (f == null) {
+            return;
+        }
+        String now;
+        try {
+            now = f.getText();
+        } catch (Throwable t) {
+            return;
+        }
+        lastFieldText.put(focusedField, now);
+        applyFieldValue(focusedField, now);
+    }
+
+    /** 把某个字段的新值同步到面板状态。 */
+    private void applyFieldValue(String key, String value) {
+        if ("search".equals(key)) {
+            query = value == null ? "" : value;
+            page = 0;
+            needsRebuild = true;
+        } else if ("picker".equals(key)) {
+            pickerQuery = value == null ? "" : value;
+            pickerPage = 0;
+            needsRebuild = true;
+        } else {
+            int bar = key.indexOf('|');
+            if (bar > 0) {
+                draft.put(key, value == null ? "" : value);
+                updatePreview(key.substring(0, bar));
+            }
+        }
+    }
+
+    /**
+     * 把按键转发给当前聚焦的输入框。
+     *
+     * @return 是否已处理该事件
+     */
+    private boolean forwardKey(InputEventAPI e) {
+        TextFieldAPI f = fields.get(focusedField);
+        if (f == null) {
+            return false;
+        }
+        if (!e.isKeyDownEvent() && !e.isRepeat()) {
+            return false;
+        }
+        int v = e.getEventValue();
+        try {
+            if (v == Keyboard.KEY_RETURN || v == Keyboard.KEY_NUMPADENTER) {
+                commitFocused();
+                if (!"search".equals(focusedField) && !"picker".equals(focusedField)) {
+                    int bar = focusedField.indexOf('|');
+                    if (bar > 0) {
+                        runCommand(focusedField.substring(0, bar));
+                    }
+                }
+                setFocus(null);
+                return true;
+            }
+            if (v == Keyboard.KEY_BACK) {
+                String cur = f.getText();
+                if (cur != null && !cur.isEmpty()) {
+                    f.setText(cur.substring(0, cur.length() - 1));
+                }
+                applyFieldValue(focusedField, f.getText());
+                return true;
+            }
+            if (v == Keyboard.KEY_DELETE) {
+                f.deleteAll();
+                applyFieldValue(focusedField, "");
+                return true;
+            }
+            if (v == Keyboard.KEY_V && e.isCtrlDown()) {
+                pasteFromClipboard(f);
+                return true;
+            }
+            if (e.isCtrlDown() || e.isAltDown()) {
+                return false;
+            }
+            char c = e.getEventChar();
+            if (c == 0 || c == '\u0000') {
+                return false;
+            }
+            boolean ok = false;
+            try {
+                ok = f.isValidChar(c) && f.appendCharIfPossible(c);
+            } catch (Throwable ignored) {
+                ok = false;
+            }
+            if (ok) {
+                applyFieldValue(focusedField, f.getText());
+            }
+            return ok;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private void pasteFromClipboard(TextFieldAPI f) {
+        try {
+            Object clip = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .getData(java.awt.datatransfer.DataFlavor.stringFlavor);
+            if (clip == null) {
+                return;
+            }
+            String s = String.valueOf(clip);
+            for (int i = 0; i < s.length(); i++) {
+                char c = s.charAt(i);
+                if (c == '\n' || c == '\r') {
+                    continue;
+                }
+                try {
+                    f.appendCharIfPossible(c);
+                } catch (Throwable ignored) {
+                }
+            }
+            applyFieldValue(focusedField, f.getText());
         } catch (Throwable ignored) {
         }
     }
@@ -760,6 +994,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 close();
                 return;
             }
+            // 屏幕尺寸变化（切换分辨率 / 窗口化）时重建
+            float sw = Global.getSettings().getScreenWidth();
+            float sh = Global.getSettings().getScreenHeight();
+            if (sw != lastW || sh != lastH) {
+                lastW = sw;
+                lastH = sh;
+                resize();
+            }
             pollFields();
             if (needsRebuild) {
                 needsRebuild = false;
@@ -769,8 +1011,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
     }
 
-    /** 轮询输入框变化：只更新状态，不重建（避免光标丢失）。 */
+    /**
+     * 轮询输入框变化（主要用于未经本插件转发的场景，如外部 mod 直接改文本）。
+     * 正常情况下键盘输入由 {@link #forwardKey} 即时处理。
+     */
     private void pollFields() {
+        if (focusedField != null) {
+            return;
+        }
         for (Map.Entry<String, TextFieldAPI> en : fields.entrySet()) {
             String key = en.getKey();
             TextFieldAPI f = en.getValue();
@@ -788,21 +1036,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 continue;
             }
             lastFieldText.put(key, now);
-            if ("search".equals(key)) {
-                query = now == null ? "" : now;
-                page = 0;
-                needsRebuild = true;
-            } else if ("picker".equals(key)) {
-                pickerQuery = now == null ? "" : now;
-                pickerPage = 0;
-                needsRebuild = true;
-            } else {
-                int bar = key.indexOf('|');
-                if (bar > 0) {
-                    draft.put(key, now == null ? "" : now);
-                    updatePreview(key.substring(0, bar));
-                }
-            }
+            applyFieldValue(key, now);
         }
     }
 
@@ -834,6 +1068,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             GL11.glBlendFunc(GL11.GL_SRC_ALPHA, GL11.GL_ONE_MINUS_SRC_ALPHA);
             GL11.glColor4f(c.getRed() / 255f, c.getGreen() / 255f, c.getBlue() / 255f, a * alphaMult);
             GL11.glRectf(0f, 0f, Global.getSettings().getScreenWidth(), Global.getSettings().getScreenHeight());
+            // 内容区再叠一层，形成「面板内更暗」的层次
+            if (bgPanel != null && bgPanel.getPosition() != null) {
+                PositionAPI bp = bgPanel.getPosition();
+                float bx = bp.getX();
+                float by = bp.getY();
+                GL11.glColor4f(0.02f, 0.03f, 0.05f, Math.min(1f, a + 0.08f) * alphaMult);
+                GL11.glRectf(bx, by, bx + bp.getWidth(), by + bp.getHeight());
+            }
             GL11.glPopMatrix();
         } catch (Throwable ignored) {
         }
@@ -914,6 +1156,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             } else if ("clearsearch".equals(id)) {
                 query = "";
                 page = 0;
+                needsRebuild = true;
+            } else if ("clear".equals(id)) {
+                try {
+                    ConsoleOverlayPanel.setOutput("");
+                } catch (Throwable ignored) {
+                }
                 needsRebuild = true;
             } else if ("clearlog".equals(id)) {
                 try {
@@ -1021,7 +1269,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             v = Double.parseDouble(cur.trim());
         } catch (Throwable t) {
             try {
-                v = spec.defaultValue == null || spec.defaultValue.isEmpty() ? 0d : Double.parseDouble(spec.defaultValue);
+                v = spec.defaultValue == null || spec.defaultValue.isEmpty()
+                        ? 0d : Double.parseDouble(spec.defaultValue);
             } catch (Throwable t2) {
                 v = 0d;
             }
@@ -1121,8 +1370,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             String v = valueOf(e, p);
             boolean hasSource = p.source != null && !p.source.isEmpty();
             if (ParamSpec.TYPE_ID.equals(p.type) && hasSource && v != null && !v.trim().isEmpty()) {
-                String src = p.source;
-                List<IdOption> opts = idOptions(src);
+                List<IdOption> opts = idOptions(p.source);
                 String resolved = IdSource.resolve(opts, v);
                 if (!resolved.equals(v.trim())) {
                     List<IdOption> cand = IdSource.candidates(opts, v, 4);
@@ -1212,10 +1460,48 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             return;
         }
 
-        List<String> lines = buildLines(e);
+        final List<String> lines = buildLines(e);
         if (lines.isEmpty()) {
             return;
         }
+
+        // 危险操作二次确认（设置项 cf_confirmDestructive）
+        if (e.confirm && FrontendSettings.confirmDestructive
+                && Global.getCurrentState() == GameState.CAMPAIGN) {
+            try {
+                CampaignUIAPI ui = Global.getSector().getCampaignUI();
+                if (ui != null) {
+                    StringBuilder preview = new StringBuilder();
+                    for (int i = 0; i < lines.size(); i++) {
+                        if (i > 0) {
+                            preview.append("  ;  ");
+                        }
+                        preview.append(lines.get(i));
+                    }
+                    final CatalogEntry entry = e;
+                    boolean shown = ui.showConfirmDialog(
+                            "确认执行「" + e.labelOrName() + "」？",
+                            "该操作可能无法撤销。\n\n将要执行：\n" + preview,
+                            "执行",
+                            new Script() {
+                                @Override
+                                public void run() {
+                                    persistAndRun(entry, lines);
+                                }
+                            },
+                            null);
+                    if (shown) {
+                        return;
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        persistAndRun(e, lines);
+    }
+
+    /** 保存参数后逐条执行。 */
+    private void persistAndRun(CatalogEntry e, List<String> lines) {
         for (ParamSpec p : e.params) {
             String v = valueOf(e, p);
             ParamStore.set(e.command, p.key, p.format(v));
@@ -1229,6 +1515,13 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private void execute(String commandLine) {
         try {
             Console.parseInput(commandLine, context);
+            if (Global.getCurrentState() == GameState.CAMPAIGN) {
+                try {
+                    Global.getSector().getCampaignUI().addMessage("前端面板: " + commandLine,
+                            Misc.getHighlightColor());
+                } catch (Throwable ignored) {
+                }
+            }
         } catch (Throwable t) {
             try {
                 Console.showException("前端面板执行失败: " + commandLine, t);
