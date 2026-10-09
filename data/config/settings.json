@@ -1,0 +1,5 @@
+{
+    "plugins": {
+        "ConsoleFrontendCombatListener": "org.dsh.frontend.FrontendCombatListener"
+    }
+}

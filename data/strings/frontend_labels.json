@@ -1,0 +1,1265 @@
+{
+  "categories": {
+    "economy": {
+      "name": "经济与资源",
+      "order": 10
+    },
+    "fleet": {
+      "name": "舰队与舰船",
+      "order": 20
+    },
+    "character": {
+      "name": "角色与军官",
+      "order": 30
+    },
+    "combat": {
+      "name": "战斗",
+      "order": 40
+    },
+    "map": {
+      "name": "星图与移动",
+      "order": 50
+    },
+    "market": {
+      "name": "市场与殖民地",
+      "order": 60
+    },
+    "system": {
+      "name": "系统与调试",
+      "order": 70
+    },
+    "all": {
+      "name": "全部命令",
+      "order": 999
+    }
+  },
+  "order": [
+    "addcredits",
+    "addsupplies",
+    "addfuel",
+    "addcrew",
+    "addmarines",
+    "addmarinexp",
+    "addstorypoints",
+    "addxp",
+    "addskillpoints",
+    "addcommandpoints",
+    "addordnancepoints",
+    "allcommodities",
+    "additem",
+    "addweapon",
+    "addwing",
+    "addship",
+    "addhullmod",
+    "addspecial",
+    "allhulls",
+    "allweapons",
+    "allwings",
+    "allhullmods",
+    "allblueprints",
+    "repair",
+    "storage",
+    "forcemarketupdate",
+    "addofficer",
+    "allofficerskills",
+    "respec",
+    "god",
+    "infiniteammo",
+    "infiniteflux",
+    "infinitecr",
+    "nocooldown",
+    "nuke",
+    "kill",
+    "flameout",
+    "rout",
+    "blockretreat",
+    "endcombat",
+    "forcedeployall",
+    "removehulks",
+    "traitor",
+    "toggleai",
+    "showai",
+    "showbounds",
+    "suicide",
+    "jump",
+    "goto",
+    "home",
+    "sethome",
+    "hide",
+    "reveal",
+    "survey",
+    "planetlist",
+    "findship",
+    "finditem",
+    "setcommission",
+    "adjustrelation",
+    "setrelation",
+    "factioninfo",
+    "showloc",
+    "addcondition",
+    "removecondition",
+    "addindustry",
+    "removeindustry",
+    "addsubmarket",
+    "removesubmarket",
+    "setmarketsize",
+    "fastbuild",
+    "destroycolony",
+    "openmarket",
+    "forcedismissdialog",
+    "help",
+    "list",
+    "status",
+    "sourceof",
+    "modinfo",
+    "devmode",
+    "reload",
+    "bugreport",
+    "dumpheap",
+    "clear",
+    "history",
+    "alias",
+    "runcode",
+    "debugdialogs"
+  ],
+  "commands": {
+    "addcredits": {
+      "label": "加金币",
+      "category": "economy",
+      "desc": "舰队账户增加指定数量的星币",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量",
+          "type": "int",
+          "default": 1000000,
+          "min": 1,
+          "max": 1000000000
+        }
+      ],
+      "run": "addcredits %amount%"
+    },
+    "addsupplies": {
+      "label": "加补给",
+      "category": "economy",
+      "desc": "补充补给；数量填 0 则补到约 50% 载货量",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量（0=自动）",
+          "type": "int",
+          "default": 0,
+          "min": 0
+        }
+      ],
+      "run": "addsupplies %amount%"
+    },
+    "addfuel": {
+      "label": "加燃料",
+      "category": "economy",
+      "desc": "补充燃料；数量填 0 则补满",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量（0=自动）",
+          "type": "int",
+          "default": 0,
+          "min": 0
+        }
+      ],
+      "run": "addfuel %amount%"
+    },
+    "addcrew": {
+      "label": "加船员",
+      "category": "economy",
+      "desc": "补充船员；数量填 0 则补到舰队所需",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量（0=自动）",
+          "type": "int",
+          "default": 0,
+          "min": 0
+        }
+      ],
+      "run": "addcrew %amount%"
+    },
+    "addmarines": {
+      "label": "加陆战队",
+      "category": "economy",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量",
+          "type": "int",
+          "default": 100,
+          "min": 1
+        }
+      ],
+      "run": "addmarines %amount%"
+    },
+    "addmarinexp": {
+      "label": "加陆战队经验",
+      "category": "economy",
+      "desc": "数量填 0 则改为显示当前陆战队信息",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量（0=查看）",
+          "type": "int",
+          "default": 0,
+          "min": 0
+        }
+      ],
+      "run": "addmarinexp %amount%"
+    },
+    "addstorypoints": {
+      "label": "加故事点",
+      "category": "character",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量",
+          "type": "int",
+          "default": 10,
+          "min": 1
+        }
+      ],
+      "run": "addstorypoints %amount%"
+    },
+    "addxp": {
+      "label": "加经验",
+      "category": "character",
+      "desc": "数量填 0 则补到下一次升级所需",
+      "params": [
+        {
+          "key": "amount",
+          "label": "经验（0=自动）",
+          "type": "int",
+          "default": 0,
+          "min": 0
+        }
+      ],
+      "run": "addxp %amount%"
+    },
+    "addskillpoints": {
+      "label": "加技能点",
+      "category": "character",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量",
+          "type": "int",
+          "default": 10,
+          "min": 1
+        }
+      ],
+      "run": "addskillpoints %amount%"
+    },
+    "addcommandpoints": {
+      "label": "加指挥点",
+      "category": "combat",
+      "desc": "战斗中增加额外指挥点",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量",
+          "type": "int",
+          "default": 100,
+          "min": 1
+        }
+      ],
+      "run": "addcommandpoints %amount%"
+    },
+    "addordnancepoints": {
+      "label": "加装配点",
+      "category": "fleet",
+      "params": [
+        {
+          "key": "amount",
+          "label": "数量",
+          "type": "int",
+          "default": 100,
+          "min": 1
+        }
+      ],
+      "run": "addordnancepoints %amount%"
+    },
+    "allcommodities": {
+      "label": "全部商品",
+      "category": "economy",
+      "desc": "在仓库中放入每种商品一万单位",
+      "params": [
+        {
+          "key": "station",
+          "label": "目标（留空=仓库）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "allcommodities %station%"
+    },
+    "additem": {
+      "label": "加物品",
+      "category": "fleet",
+      "desc": "向舰队货舱添加资源或特殊物品",
+      "params": [
+        {
+          "key": "item",
+          "label": "物品",
+          "type": "id",
+          "source": "commodity+special",
+          "default": "supplies"
+        },
+        {
+          "key": "amount",
+          "label": "数量",
+          "type": "int",
+          "default": 100,
+          "min": 1
+        }
+      ],
+      "run": "additem %item% %amount%"
+    },
+    "addweapon": {
+      "label": "加武器",
+      "category": "fleet",
+      "params": [
+        {
+          "key": "weapon",
+          "label": "武器",
+          "type": "id",
+          "source": "weapon",
+          "default": "heavyac"
+        },
+        {
+          "key": "amount",
+          "label": "数量",
+          "type": "int",
+          "default": 10,
+          "min": 1
+        }
+      ],
+      "run": "addweapon %weapon% %amount%"
+    },
+    "addwing": {
+      "label": "加战机",
+      "category": "fleet",
+      "params": [
+        {
+          "key": "wing",
+          "label": "战机",
+          "type": "id",
+          "source": "wing",
+          "default": "broadsword"
+        },
+        {
+          "key": "amount",
+          "label": "数量",
+          "type": "int",
+          "default": 5,
+          "min": 1
+        }
+      ],
+      "run": "addwing %wing% %amount%"
+    },
+    "addship": {
+      "label": "加舰船",
+      "category": "fleet",
+      "desc": "向舰队添加舰船（可填舰船或变体 ID）",
+      "params": [
+        {
+          "key": "variant",
+          "label": "舰船 / 变体",
+          "type": "id",
+          "source": "ship+variant",
+          "default": "onslaught"
+        }
+      ],
+      "run": "addship %variant%"
+    },
+    "addhullmod": {
+      "label": "加船插",
+      "category": "fleet",
+      "desc": "把船插放入货舱",
+      "params": [
+        {
+          "key": "hullmod",
+          "label": "船插",
+          "type": "id",
+          "source": "hullmod",
+          "default": "heavyarmor"
+        }
+      ],
+      "run": "addhullmod %hullmod%"
+    },
+    "addspecial": {
+      "label": "加特殊物品",
+      "category": "fleet",
+      "desc": "添加带数据的特殊物品（蓝图等）",
+      "params": [
+        {
+          "key": "special",
+          "label": "特殊物品",
+          "type": "id",
+          "source": "special",
+          "default": "ship_bp"
+        },
+        {
+          "key": "data",
+          "label": "附加数据（可空）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "addspecial %special% %data%"
+    },
+    "allhulls": {
+      "label": "全部舰船",
+      "category": "fleet",
+      "desc": "放入每种可驾驶舰船各一艘",
+      "params": [
+        {
+          "key": "station",
+          "label": "目标（留空=仓库）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "allhulls %station%"
+    },
+    "allweapons": {
+      "label": "全部武器",
+      "category": "fleet",
+      "params": [
+        {
+          "key": "station",
+          "label": "目标（留空=仓库）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "allweapons %station%"
+    },
+    "allwings": {
+      "label": "全部战机",
+      "category": "fleet",
+      "params": [
+        {
+          "key": "station",
+          "label": "目标（留空=仓库）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "allwings %station%"
+    },
+    "allhullmods": {
+      "label": "解锁全部船插",
+      "category": "fleet",
+      "run": "allhullmods",
+      "desc": "解锁全部船插（直到关闭游戏为止）"
+    },
+    "allblueprints": {
+      "label": "解锁全部蓝图",
+      "category": "market",
+      "confirm": true,
+      "desc": "解锁全部舰船 / 武器 / 战机蓝图（不含工业）",
+      "params": [
+        {
+          "key": "types",
+          "label": "类型（可空/多选）",
+          "type": "text",
+          "default": "",
+          "hint": "ships wings weapons industries"
+        }
+      ],
+      "run": "allblueprints %types%"
+    },
+    "repair": {
+      "label": "全部修复",
+      "category": "fleet",
+      "run": "repair",
+      "desc": "修复舰队或战场上所有友方舰船"
+    },
+    "storage": {
+      "label": "打开仓库",
+      "category": "map",
+      "desc": "从任意位置打开仓库",
+      "params": [
+        {
+          "key": "mode",
+          "label": "模式",
+          "type": "enum",
+          "options": [
+            "",
+            "set",
+            "clear"
+          ],
+          "default": ""
+        }
+      ],
+      "run": "storage %mode%"
+    },
+    "forcemarketupdate": {
+      "label": "刷新全部市场",
+      "category": "fleet",
+      "run": "forcemarketupdate"
+    },
+    "addofficer": {
+      "label": "加军官",
+      "category": "character",
+      "params": [
+        {
+          "key": "personality",
+          "label": "性格",
+          "type": "id",
+          "source": "personality",
+          "default": "steady"
+        },
+        {
+          "key": "level",
+          "label": "等级",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 20
+        },
+        {
+          "key": "faction",
+          "label": "派系",
+          "type": "id",
+          "source": "faction",
+          "default": "player"
+        },
+        {
+          "key": "name",
+          "label": "名字（可空）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "addofficer %personality% %level% %faction% %name%"
+    },
+    "allofficerskills": {
+      "label": "军官满技能",
+      "category": "character",
+      "params": [
+        {
+          "key": "officer",
+          "label": "军官",
+          "type": "text",
+          "default": "",
+          "hint": "姓名或编号，见 list officers"
+        }
+      ],
+      "run": "allofficerskills %officer%"
+    },
+    "respec": {
+      "label": "重置技能点",
+      "category": "character",
+      "params": [
+        {
+          "key": "officer",
+          "label": "军官（留空=玩家）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "respec %officer%"
+    },
+    "god": {
+      "label": "无敌",
+      "category": "combat",
+      "desc": "切换无敌状态",
+      "params": [
+        {
+          "key": "target",
+          "label": "目标",
+          "type": "enum",
+          "options": [
+            "PLAYER",
+            "FLEET",
+            "ENEMY",
+            "ALL"
+          ],
+          "default": "PLAYER"
+        }
+      ],
+      "run": "god %target%"
+    },
+    "infiniteammo": {
+      "label": "无限弹药",
+      "category": "combat",
+      "params": [
+        {
+          "key": "target",
+          "label": "目标",
+          "type": "enum",
+          "options": [
+            "PLAYER",
+            "FLEET",
+            "ENEMY",
+            "ALL"
+          ],
+          "default": "PLAYER"
+        }
+      ],
+      "run": "infiniteammo %target%"
+    },
+    "infiniteflux": {
+      "label": "无限幅能",
+      "category": "combat",
+      "params": [
+        {
+          "key": "target",
+          "label": "目标",
+          "type": "enum",
+          "options": [
+            "PLAYER",
+            "FLEET",
+            "ENEMY",
+            "ALL"
+          ],
+          "default": "PLAYER"
+        }
+      ],
+      "run": "infiniteflux %target%"
+    },
+    "infinitecr": {
+      "label": "无限战备",
+      "category": "combat",
+      "params": [
+        {
+          "key": "target",
+          "label": "目标",
+          "type": "enum",
+          "options": [
+            "PLAYER",
+            "FLEET",
+            "ENEMY",
+            "ALL"
+          ],
+          "default": "PLAYER"
+        }
+      ],
+      "run": "infinitecr %target%"
+    },
+    "nocooldown": {
+      "label": "无冷却",
+      "category": "combat",
+      "params": [
+        {
+          "key": "target",
+          "label": "目标",
+          "type": "enum",
+          "options": [
+            "PLAYER",
+            "FLEET",
+            "ENEMY",
+            "ALL"
+          ],
+          "default": "PLAYER"
+        }
+      ],
+      "run": "nocooldown %target%"
+    },
+    "nuke": {
+      "label": "清空敌人",
+      "category": "combat",
+      "run": "nuke",
+      "desc": "摧毁战场上所有敌人，击杀计入玩家"
+    },
+    "kill": {
+      "label": "击杀目标",
+      "category": "combat",
+      "run": "kill",
+      "desc": "击杀当前目标；战役中进入点击销毁模式"
+    },
+    "flameout": {
+      "label": "目标熄火",
+      "category": "combat",
+      "run": "flameout",
+      "desc": "让当前目标所有引擎熄火"
+    },
+    "rout": {
+      "label": "敌人撤退",
+      "category": "combat",
+      "run": "rout"
+    },
+    "blockretreat": {
+      "label": "禁止撤退",
+      "category": "combat",
+      "run": "blockretreat",
+      "desc": "切换：敌人是否可下令全面撤退"
+    },
+    "endcombat": {
+      "label": "结束战斗",
+      "category": "combat",
+      "params": [
+        {
+          "key": "side",
+          "label": "获胜方",
+          "type": "enum",
+          "options": [
+            "player",
+            "enemy"
+          ],
+          "default": "player"
+        }
+      ],
+      "run": "endcombat %side%"
+    },
+    "forcedeployall": {
+      "label": "敌人全部署",
+      "category": "combat",
+      "run": "forcedeployall"
+    },
+    "removehulks": {
+      "label": "清除残骸",
+      "category": "combat",
+      "run": "removehulks",
+      "desc": "注意：会影响战后打捞与舰船回收"
+    },
+    "traitor": {
+      "label": "目标叛变",
+      "category": "combat",
+      "run": "traitor",
+      "desc": "切换当前目标所属阵营"
+    },
+    "toggleai": {
+      "label": "开关 AI",
+      "category": "combat",
+      "params": [
+        {
+          "key": "target",
+          "label": "目标",
+          "type": "enum",
+          "options": [
+            "FLEET",
+            "ENEMY",
+            "ALL"
+          ],
+          "default": "ENEMY"
+        },
+        {
+          "key": "state",
+          "label": "状态",
+          "type": "enum",
+          "options": [
+            "on",
+            "off"
+          ],
+          "default": "off"
+        }
+      ],
+      "run": "toggleai %target% %state%"
+    },
+    "showai": {
+      "label": "显示 AI 目标",
+      "category": "combat",
+      "run": "showai"
+    },
+    "showbounds": {
+      "label": "显示碰撞范围",
+      "category": "combat",
+      "run": "showbounds"
+    },
+    "suicide": {
+      "label": "自杀",
+      "category": "combat",
+      "confirm": true,
+      "run": "suicide",
+      "desc": "战斗中摧毁当前舰船；战役中摧毁整个舰队"
+    },
+    "jump": {
+      "label": "跳跃到星系",
+      "category": "map",
+      "desc": "传送到指定星系（会落在恒星处）",
+      "params": [
+        {
+          "key": "system",
+          "label": "星系",
+          "type": "id",
+          "source": "system",
+          "default": ""
+        }
+      ],
+      "run": "jump %system%"
+    },
+    "goto": {
+      "label": "传送到地点",
+      "category": "map",
+      "desc": "传送到当前星系内的目标（也可填 home）",
+      "params": [
+        {
+          "key": "location",
+          "label": "目标",
+          "type": "id",
+          "source": "market+system",
+          "default": ""
+        }
+      ],
+      "run": "goto %location%"
+    },
+    "home": {
+      "label": "回老家",
+      "category": "map",
+      "run": "home"
+    },
+    "sethome": {
+      "label": "设置老家",
+      "category": "map",
+      "params": [
+        {
+          "key": "home",
+          "label": "地点（留空=当前位置附近）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "sethome %home%"
+    },
+    "hide": {
+      "label": "舰队隐身",
+      "category": "map",
+      "run": "hide"
+    },
+    "reveal": {
+      "label": "揭示星图",
+      "category": "map",
+      "run": "reveal",
+      "desc": "战役图获得无限传感器范围；战斗图切换战争迷雾"
+    },
+    "survey": {
+      "label": "全图扫描",
+      "category": "map",
+      "desc": "扫描当前星系；填 all 扫描全部",
+      "params": [
+        {
+          "key": "location",
+          "label": "位置（留空=当前星系）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "survey %location%"
+    },
+    "planetlist": {
+      "label": "行星列表",
+      "category": "map",
+      "params": [
+        {
+          "key": "filter",
+          "label": "过滤词",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "planetlist %filter%"
+    },
+    "findship": {
+      "label": "查找舰船出售地",
+      "category": "map",
+      "params": [
+        {
+          "key": "hull",
+          "label": "舰船",
+          "type": "id",
+          "source": "ship",
+          "default": ""
+        }
+      ],
+      "run": "findship %hull%"
+    },
+    "finditem": {
+      "label": "查找物品出售地",
+      "category": "map",
+      "params": [
+        {
+          "key": "item",
+          "label": "物品",
+          "type": "id",
+          "source": "commodity+special",
+          "default": ""
+        }
+      ],
+      "run": "finditem %item%"
+    },
+    "setcommission": {
+      "label": "设置势力关系",
+      "category": "map",
+      "desc": "为某派系效力；填 none 则解除",
+      "params": [
+        {
+          "key": "faction",
+          "label": "派系",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony"
+        }
+      ],
+      "run": "setcommission %faction%"
+    },
+    "adjustrelation": {
+      "label": "调整关系",
+      "category": "map",
+      "params": [
+        {
+          "key": "faction",
+          "label": "派系（all=全部）",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony"
+        },
+        {
+          "key": "amount",
+          "label": "变化量",
+          "type": "int",
+          "default": 50,
+          "min": -100,
+          "max": 100
+        }
+      ],
+      "run": "adjustrelation %faction% %amount%"
+    },
+    "setrelation": {
+      "label": "设置关系",
+      "category": "map",
+      "params": [
+        {
+          "key": "faction",
+          "label": "派系（all=全部）",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony"
+        },
+        {
+          "key": "amount",
+          "label": "关系值",
+          "type": "int",
+          "default": 50,
+          "min": -100,
+          "max": 100
+        }
+      ],
+      "run": "setrelation %faction% %amount%"
+    },
+    "factioninfo": {
+      "label": "派系科技",
+      "category": "map",
+      "params": [
+        {
+          "key": "faction",
+          "label": "派系",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony"
+        }
+      ],
+      "run": "factioninfo %faction%"
+    },
+    "showloc": {
+      "label": "显示坐标",
+      "category": "map",
+      "run": "showloc"
+    },
+    "addcondition": {
+      "label": "加市场条件",
+      "category": "market",
+      "params": [
+        {
+          "key": "condition",
+          "label": "条件",
+          "type": "id",
+          "source": "condition",
+          "default": "habitable"
+        }
+      ],
+      "run": "addcondition %condition%"
+    },
+    "removecondition": {
+      "label": "移除市场条件",
+      "category": "market",
+      "params": [
+        {
+          "key": "condition",
+          "label": "条件（留空=列出）",
+          "type": "id",
+          "source": "condition",
+          "default": ""
+        }
+      ],
+      "run": "removecondition %condition%"
+    },
+    "addindustry": {
+      "label": "加工业",
+      "category": "market",
+      "params": [
+        {
+          "key": "industry",
+          "label": "工业",
+          "type": "id",
+          "source": "industry",
+          "default": "heavyindustry"
+        }
+      ],
+      "run": "addindustry %industry%"
+    },
+    "removeindustry": {
+      "label": "移除工业",
+      "category": "market",
+      "params": [
+        {
+          "key": "industry",
+          "label": "工业（留空=列出）",
+          "type": "id",
+          "source": "industry",
+          "default": ""
+        }
+      ],
+      "run": "removeindustry %industry%"
+    },
+    "addsubmarket": {
+      "label": "加子市场",
+      "category": "market",
+      "params": [
+        {
+          "key": "submarket",
+          "label": "子市场",
+          "type": "id",
+          "source": "submarket",
+          "default": "open_market"
+        }
+      ],
+      "run": "addsubmarket %submarket%"
+    },
+    "removesubmarket": {
+      "label": "移除子市场",
+      "category": "market",
+      "params": [
+        {
+          "key": "submarket",
+          "label": "子市场（留空=列出）",
+          "type": "id",
+          "source": "submarket",
+          "default": ""
+        }
+      ],
+      "run": "removesubmarket %submarket%"
+    },
+    "setmarketsize": {
+      "label": "设置市场规模",
+      "category": "market",
+      "params": [
+        {
+          "key": "size",
+          "label": "规模",
+          "type": "int",
+          "default": 7,
+          "min": 1,
+          "max": 10
+        }
+      ],
+      "run": "setmarketsize %size%"
+    },
+    "fastbuild": {
+      "label": "立即完工",
+      "category": "market",
+      "run": "fastbuild",
+      "desc": "立即完成当前殖民地的建造与升级"
+    },
+    "destroycolony": {
+      "label": "摧毁殖民地",
+      "category": "market",
+      "confirm": true,
+      "run": "destroycolony",
+      "desc": "摧毁当前停靠的殖民地（等同于饱和轰炸，但不会归罪于玩家）"
+    },
+    "openmarket": {
+      "label": "打开市场",
+      "category": "market",
+      "desc": "关闭控制台后打开指定市场的交互界面",
+      "params": [
+        {
+          "key": "market",
+          "label": "市场",
+          "type": "id",
+          "source": "market",
+          "default": ""
+        }
+      ],
+      "run": "openmarket %market%"
+    },
+    "forcedismissdialog": {
+      "label": "强制关闭对话框",
+      "category": "market",
+      "run": "forcedismissdialog"
+    },
+    "help": {
+      "label": "帮助",
+      "category": "system",
+      "params": [
+        {
+          "key": "command",
+          "label": "命令名（留空=列出全部）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "help %command%"
+    },
+    "list": {
+      "label": "列出 ID",
+      "category": "system",
+      "desc": "列出各类内部 ID，供其它命令使用",
+      "params": [
+        {
+          "key": "category",
+          "label": "类别",
+          "type": "enum",
+          "options": [
+            "ships",
+            "variants",
+            "wings",
+            "weapons",
+            "items",
+            "specials",
+            "factions",
+            "bases",
+            "systems",
+            "planets",
+            "stations",
+            "markets",
+            "conditions",
+            "industries",
+            "officers",
+            "aliases",
+            "commands",
+            "mods"
+          ],
+          "default": "ships"
+        },
+        {
+          "key": "filter",
+          "label": "过滤词",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "list %category% %filter%"
+    },
+    "status": {
+      "label": "控制台状态",
+      "category": "system",
+      "run": "status"
+    },
+    "sourceof": {
+      "label": "命令来源",
+      "category": "system",
+      "params": [
+        {
+          "key": "command",
+          "label": "命令名（all=全部）",
+          "type": "text",
+          "default": "all"
+        }
+      ],
+      "run": "sourceof %command%"
+    },
+    "modinfo": {
+      "label": "Mod 信息",
+      "category": "system",
+      "params": [
+        {
+          "key": "mod",
+          "label": "Mod ID",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "modinfo %mod%"
+    },
+    "devmode": {
+      "label": "开发模式",
+      "category": "system",
+      "params": [
+        {
+          "key": "state",
+          "label": "状态（留空=切换）",
+          "type": "enum",
+          "options": [
+            "",
+            "on",
+            "off"
+          ],
+          "default": ""
+        }
+      ],
+      "run": "devmode %state%"
+    },
+    "reload": {
+      "label": "重载控制台",
+      "category": "system",
+      "run": "reload",
+      "desc": "重新加载全部控制台命令与设置"
+    },
+    "bugreport": {
+      "label": "复制系统信息",
+      "category": "system",
+      "run": "bugreport"
+    },
+    "dumpheap": {
+      "label": "导出堆内存",
+      "category": "system",
+      "run": "dumpheap"
+    },
+    "clear": {
+      "label": "清屏",
+      "category": "system",
+      "run": "clear"
+    },
+    "history": {
+      "label": "命令历史",
+      "category": "system",
+      "run": "history"
+    },
+    "alias": {
+      "label": "设置别名",
+      "category": "system",
+      "params": [
+        {
+          "key": "alias",
+          "label": "别名",
+          "type": "text",
+          "default": ""
+        },
+        {
+          "key": "commands",
+          "label": "要执行的命令（分号分隔）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "alias %alias% %commands%"
+    },
+    "runcode": {
+      "label": "运行代码",
+      "category": "system",
+      "params": [
+        {
+          "key": "code",
+          "label": "Java 代码",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "runcode %code%"
+    },
+    "debugdialogs": {
+      "label": "调试对话框",
+      "category": "system",
+      "run": "debugdialogs"
+    }
+  }
+}

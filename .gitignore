@@ -1,0 +1,16 @@
+# 构建产物
+build/
+*.class
+jars/*.jar
+
+# 编辑器 / 系统
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 本地临时文件
+*.log
+*.tmp
+*.bak

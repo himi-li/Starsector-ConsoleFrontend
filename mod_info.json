@@ -1,0 +1,18 @@
+{
+    "id": "console_frontend",
+    "name": "Console Frontend",
+    "author": "dsh",
+    "version": "1.0.0",
+    "description": "为 Console Commands 提供中文按钮式前端面板：点击按钮即自动执行对应的控制台命令。\n\n带参数的命令（如 addcredits）可自由设置数值并被记住，下次使用仍是上次的设置；需要 ID 的命令（如 additem）提供「游戏内名称优先、ID 作为注释」的可搜索下拉选择器，也支持直接输入。\n\n默认热键：Ctrl + ~（反引号）。可在游戏内的 Mod 设置（LunaLib）中更改。\n\n需要 Console Commands 4.0.x。",
+    "gameVersion": "0.98a-RC8",
+    "jars": [
+        "jars/ConsoleFrontend.jar"
+    ],
+    "dependencies": [
+        {
+            "id": "lw_console",
+            "name": "Console Commands"
+        }
+    ],
+    "modPlugin": "org.dsh.frontend.ConsoleFrontendModPlugin"
+}

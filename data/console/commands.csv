@@ -1,0 +1,3 @@
+command,class,tags,syntax,help
+ConsoleFrontend,org.dsh.frontend.FrontendCommand,console,consolefrontend [open|close|reload|resetparams],"打开或关闭控制台前端按钮面板。
+open 打开面板（默认），close 关闭，reload 重新加载标签与 ID 列表，resetparams 恢复所有命令参数的默认值。"
