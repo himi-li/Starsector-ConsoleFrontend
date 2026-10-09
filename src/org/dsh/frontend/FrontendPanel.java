@@ -13,6 +13,7 @@ import com.fs.starfarer.api.ui.Alignment;
 import com.fs.starfarer.api.ui.ButtonAPI;
 import com.fs.starfarer.api.ui.CustomPanelAPI;
 import com.fs.starfarer.api.ui.CutStyle;
+
 import com.fs.starfarer.api.ui.LabelAPI;
 import com.fs.starfarer.api.ui.PositionAPI;
 import com.fs.starfarer.api.ui.ScrollPanelAPI;
@@ -493,7 +494,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         TooltipMakerAPI tm = row.createUIElement(rowW - 140f, H_HEADER, false);
         row.addUIElement(tm).inTL(0f, 4f);
         tm.setParaFontVictor14();
-        tm.addPara("控制台前端 · 命令按钮    热键 " + FrontendSettings.hotkeyText(), 6f, Misc.getBrightPlayerColor());
+        tm.addPara("控制台前端 · 命令按钮    热键 " + FrontendSettings.hotkeyText(), 8f, Misc.getBrightPlayerColor());
 
         button(row, rowW - 130f, 2f, 124f, 24f, "关闭 (ESC)", "close", "关闭面板并恢复游戏状态");
         place(row, margin, Y_HEADER);
@@ -506,7 +507,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         // 与搜索框同高同 y，并垂直居中，否则文字会显得偏上（实测未对齐）
         TooltipMakerAPI tm = row.createUIElement(44f, H_SEARCH_FIELD, false);
         row.addUIElement(tm).inTL(0f, 0f);
-        LabelAPI searchLab = tm.addPara("搜索", 6f, Misc.getGrayColor());
+        tm.setParaFontVictor14();
+        LabelAPI searchLab = tm.addPara("搜索", 8f, Misc.getGrayColor());
         try {
             searchLab.setAlignment(Alignment.LMID);
         } catch (Throwable ignored) {
@@ -582,7 +584,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 26f, false);
         box.addUIElement(tm).inTL(12f, 6f);
         tm.setParaFontVictor14();
-        tm.addPara(escapePercent("参数设置 · " + e.labelOrName()), 6f, Misc.getBrightPlayerColor());
+        tm.addPara(escapePercent("参数设置 · " + e.labelOrName()), 8f, Misc.getBrightPlayerColor());
 
         // 右侧预留：数字参数的 -/+ 两个按钮（各 30 宽）或选择器的 v 按钮（30 宽）
         final float rightReserve = 78f;
@@ -594,7 +596,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             // 标签与控件同 y、垂直居中（文本框实际渲染更高，标签偏上会显错位）
             TooltipMakerAPI lt = box.createUIElement(labelW, lineH, false);
             box.addUIElement(lt).inTL(leftPad, fy);
-            LabelAPI lab = lt.addPara(escapePercent(p.labelOrKey() + (p.required ? " *" : "")), 6f,
+            lt.setParaFontVictor14();
+            LabelAPI lab = lt.addPara(escapePercent(p.labelOrKey() + (p.required ? " *" : "")), 8f,
                     p.required ? Misc.getHighlightColor() : Misc.getGrayColor());
             try {
                 lab.setAlignment(Alignment.LMID);
@@ -725,7 +728,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         if (statusLine != null && !statusLine.isEmpty()) {
             info = statusLine + "    " + info;
         }
-        footer.addPara(escapePercent(info), 6f, Misc.getGrayColor());
+        footer.setParaFontVictor14();
+        footer.addPara(escapePercent(info), 8f, Misc.getGrayColor());
 
         if (pages > 1) {
             button(area, rowW - 260f, areaH - 26f, 80f, 22f, "上一页", "page|prev", null);
@@ -759,7 +763,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         String tail = tailLines(out, FrontendSettings.logLines);
         TooltipMakerAPI log = area.createUIElement(rowW - 16f, areaH - 36f, true);
         area.addUIElement(log).inTL(8f, 32f);
-        log.addPara(escapePercent(tail.isEmpty() ? "（暂无输出）" : tail), 4f, Misc.getTextColor());
+        log.setParaFontVictor14();
+        log.addPara(escapePercent(tail.isEmpty() ? "（暂无输出）" : tail), 6f, Misc.getTextColor());
         try {
             ScrollPanelAPI sc = log.getExternalScroller();
             if (sc != null) {
@@ -786,7 +791,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         box.addUIElement(tm).inTL(12f, 8f);
         tm.setParaFontVictor14();
         tm.addPara(escapePercent("选择" + IdSource.displayNameOf(pickerSource)
-                + "（名称优先，括号内为 ID）"), 6f, Misc.getBrightPlayerColor());
+                + "（名称优先，括号内为 ID）"), 8f, Misc.getBrightPlayerColor());
 
         // 第二行：搜索框（左侧）+ 来源标签（右侧）+ 取消
         final float row2Y = 40f;
@@ -811,22 +816,23 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         List<IdOption> all = idOptions(pickerSource);
         List<IdOption> filtered = IdSource.filter(all, pickerQuery);
-        int ps = Math.max(5, FrontendSettings.pickerPageSize);
-        int pages = Math.max(1, (int) Math.ceil(filtered.size() / (double) ps));
-        if (pickerPage >= pages) {
-            pickerPage = pages - 1;
-        }
-        if (pickerPage < 0) {
-            pickerPage = 0;
-        }
-        int from = pickerPage * ps;
-        int to = Math.min(filtered.size(), from + ps);
+        // 不再分页：一次性铺出全部条目，靠滚动条 + 鼠标滚轮浏览。
+        // 上限 800 条，避免某些 ID 极多的来源（如全部变体）导致构建过慢。
+        final int maxRows = 800;
+        int total = Math.min(filtered.size(), maxRows);
+        int from = 0;
+        int to = total;
 
         float listY = 72f;
         float listH = Math.max(40f, areaH - listY - 44f);
         CustomPanelAPI listPanel = newPanel(rowW - 24f, listH);
+        // 第三个参数 true = 自动附带外部滚动条（getExternalScroller 可取到）
         TooltipMakerAPI list = listPanel.createUIElement(rowW - 24f, listH, true);
         listPanel.addUIElement(list).inTL(0f, 0f);
+        try {
+            pickerScroller = list.getExternalScroller();
+        } catch (Throwable ignored) {
+        }
 
         float lineH = 26f;
         float innerW = rowW - 56f;
@@ -843,7 +849,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
             TooltipMakerAPI idt = line.createUIElement(innerW * 0.36f, rowH, false);
             line.addUIElement(idt).inTL(nameW + 4f, 0f);
-            LabelAPI idLab = idt.addPara(escapePercent(o.secondary()), 6f, Misc.getGrayColor());
+            idt.setParaFontVictor14();
+            LabelAPI idLab = idt.addPara(escapePercent(o.secondary()), 8f, Misc.getGrayColor());
             try {
                 idLab.setAlignment(Alignment.LMID);
             } catch (Throwable ignored) {
@@ -856,13 +863,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - 220f), 24f, false);
         box.addUIElement(foot).inTL(12f, areaH - 30f);
-        foot.addPara(escapePercent("共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages
-                + " 页（可直接输入名称或 ID，也可滚动 / 搜索）"), 4f, Misc.getGrayColor());
-
-        if (pages > 1) {
-            button(box, rowW - 186f, areaH - 32f, 84f, 24f, "上一页", "pickerpage|prev", null);
-            button(box, rowW - 96f, areaH - 32f, 84f, 24f, "下一页", "pickerpage|next", null);
+        String footText = "共 " + filtered.size() + " 项";
+        if (filtered.size() > total) {
+            footText += "（显示前 " + total + " 项，请用搜索缩小范围）";
         }
+        footText += " · 可直接输入名称或 ID，或用滚轮 / 右侧滚动条浏览";
+        foot.addPara(escapePercent(footText), 5f, Misc.getGrayColor());
 
         place(box, x, y);
     }
@@ -918,25 +924,24 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      * 这里改为自带的纯色贴图：深灰底 + 一圈亮色边框，简洁且不与文字争视觉。
      * 贴图在 graphics/cf_bg.png 与 graphics/cf_line.png，通过本 mod 的 settings.json 注册。
      */
+    /**
+     * 给面板画一圈边框。
+     *
+     * <p>曾经铺一层深灰纯色底，但实测观感发闷、且中间那块会在半透明区域透出
+     * 突兀的色块（用户反馈「太抽象」→「不要背景了」）。现在<b>只保留 2px 边框</b>，
+     * 内部完全透明，直接复用对话框自身的背景。
+     */
     private void drawPanelBackground(CustomPanelAPI host, float w, float h) {
         try {
-            // 优先用注册名解析；失败时退化为字面路径（addImage 也接受路径）
-            String fill = resolveSprite("cf_bg", "graphics/cf_bg.png");
             String line = resolveSprite("cf_line", "graphics/cf_line.png");
-
-            // 底色：铺满
-            TooltipMakerAPI bg = host.createUIElement(w, h, false);
-            host.addUIElement(bg).inTL(0f, 0f);
-            bg.addImage(fill, w, h, 0f);
-
-            // 边框：四张窄图分别定位（addImage 是顺序堆叠的，必须各自一个容器）
+            // 四条边各一张窄图，必须各自独立容器（addImage 是顺序堆叠的，无法原地定位）
             final float t = 2f;
             addRect(host, line, 0f, 0f, w, t);              // 上
             addRect(host, line, 0f, h - t, w, t);           // 下
             addRect(host, line, 0f, 0f, t, h);              // 左
             addRect(host, line, w - t, 0f, t, h);           // 右
         } catch (Throwable t) {
-            warn("绘制面板背景失败: " + t);
+            warn("绘制面板边框失败: " + t);
         }
     }
 
@@ -985,7 +990,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float ch = Math.max(1f, h);
         TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
         host.addUIElement(tm).inTL(x, y);
-        tm.setButtonFontVictor10();
+        // 字号上调：Victor10 -> Victor14（实测 victor14.fnt 含 6735 个字形、中文齐全）
+        tm.setButtonFontVictor14();
         ButtonAPI b = tm.addButton(text, id, Misc.getButtonTextColor(), Misc.getDarkPlayerColor(),
                 Alignment.MID, CutStyle.ALL, cw, ch, 0f);
         if (tooltip != null && !tooltip.trim().isEmpty()) {
@@ -1076,7 +1082,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     onEscape();
                     return;
                 }
-                // 2) 鼠标按下：落在输入框上则聚焦；落在按钮上则先提交并取消聚焦
+                // 2) 鼠标按下：落在输入框上则聚焦；落在按钮上则先提交并取消聚焦。
+                //    注意：落在【我们控件之外】时<b>不 consume</b> ——
+                //    对话框自带的「关闭 [G]」按钮不在我们的控件列表里，
+                //    之前一律 consume 导致它永远收不到点击（实测按钮无效）。
                 if (e.isMouseDownEvent() || e.isLMBDownEvent()) {
                     String hit = fieldAt(e);
                     if (hit != null) {
@@ -1087,28 +1096,52 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                             commitFocused();
                             setFocus(null);
                         }
-                        if (!insideAnyElement(e)) {
-                            e.consume();
-                        }
+                        // 不 consume：交给对话框自己的按钮处理
                     }
                     continue;
                 }
-                // 3) 键盘事件全部交给原生控件处理（它已 grabFocus）。
-                //    我们<b>不</b> consume，否则会打断游戏原生输入与 ChineseInputFix 的 IME 组合。
-                //    仅在无聚焦时吞掉，防止穿透到战役/战斗 UI。
+                // 3) 键盘事件交给原生控件与对话框。
+                //    不 consume：否则会打断原生输入、IME 组合，
+                //    以及对话框自带的 G 快捷键（实测「关闭 [G]」按 G 无效就是这个原因）。
                 if (e.isKeyboardEvent()) {
-                    if (focusedField == null) {
-                        e.consume();
-                    }
                     continue;
                 }
-                // 4) 鼠标移动事件不 consume：否则引擎无法派发 hover，
-                //    会导致部分按钮悬浮不变色（实测）。
-                //    只吞滚轮，避免滚到战役/战斗 UI。
+                // 4) 滚轮：选择器打开时用来滚动列表；其余情况吞掉，避免滚到战役/战斗 UI。
                 if (e.isMouseScrollEvent()) {
+                    if (pickerOpen) {
+                        scrollPicker(e.getEventValue());
+                    }
                     e.consume();
                 }
             }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 选择器列表的滚动条（由 createUIElement(...,true) 自动提供）。 */
+    private ScrollPanelAPI pickerScroller;
+
+    /**
+     * 滚轮滚动选择器列表。
+     *
+     * <p>只取滚动<b>方向</b>，不直接拿事件值当像素量：不同平台/驱动下
+     * {@code getEventValue()} 可能是 ±1（格子数）也可能是 ±120（LWJGL 的
+     * {@code Mouse.getEventDWheel()} 风格）。若按 120 倍算，滚一格会跳 4800px
+     * （直接冲到列表底部），所以这里统一归一化成 ±1 再乘固定步长。
+     */
+    private void scrollPicker(int wheelDelta) {
+        if (pickerScroller == null || wheelDelta == 0) {
+            return;
+        }
+        try {
+            int dir = wheelDelta > 0 ? 1 : -1;
+            float cur = pickerScroller.getYOffset();
+            // 滚轮向上（正值）→ 内容上移（offset 减小）
+            float next = cur - dir * 40f;
+            if (next < 0f) {
+                next = 0f;
+            }
+            pickerScroller.setYOffset(next);
         } catch (Throwable ignored) {
         }
     }

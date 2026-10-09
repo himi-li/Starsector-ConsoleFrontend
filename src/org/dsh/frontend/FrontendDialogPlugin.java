@@ -26,12 +26,11 @@ public class FrontendDialogPlugin implements InteractionDialogPlugin {
     /**
      * 面板四周留白。
      *
-     * <p>实测：对话框内容区若按全屏尺寸请求，右/下边缘会被裁切
-     * （游戏在对话框外层还包了一圈边框）。这里留足 120px，
-     * 确保整个界面完整落在主界面之内。
+     * <p>60px 是实测的平衡点：再小（如 0）会被对话框外层边框裁切右/下边缘，
+     * 再大（如 120）界面会明显偏小（用户反馈「调回原来的大小」）。
      */
-    private static final float MARGIN_X = 120f;
-    private static final float MARGIN_Y = 120f;
+    private static final float MARGIN_X = 60f;
+    private static final float MARGIN_Y = 60f;
 
     @Override
     public void init(InteractionDialogAPI dialog) {
@@ -47,9 +46,8 @@ public class FrontendDialogPlugin implements InteractionDialogPlugin {
         } catch (Throwable ignored) {
         }
 
-        // 再乘面板宽度比例（默认 0.8），确保不顶到主界面边缘
-        float frac = (float) Math.min(1.0, Math.max(0.4, FrontendSettings.panelWidthFraction));
-        float w = Math.max(400f, (Global.getSettings().getScreenWidth() - MARGIN_X * 2f) * frac);
+        // 直接用「屏幕尺寸 - 留白」，不再额外乘比例（那会让界面明显偏小）
+        float w = Math.max(400f, Global.getSettings().getScreenWidth() - MARGIN_X * 2f);
         float h = Math.max(300f, Global.getSettings().getScreenHeight() - MARGIN_Y * 2f);
 
         panel = new FrontendPanel(FrontendPanel.detectContext());
