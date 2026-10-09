@@ -192,33 +192,77 @@ public final class FrontendLabels {
      * 这里直接按 mod 目录用 java.nio 读文件，完全不触碰游戏的资源加载状态。
      */
     private static String readLabelsFile() {
-        String rel = "data/strings/frontend_labels.json";
+        // 优先使用游戏提供的特权 API：脚本沙箱会拦截直接的 java.nio 文件访问
+        // （SecurityException: File access and reflection are not allowed to scripts）。
+        // 注意只能在 onGameLoad 之后调用，不能在 onApplicationLoad 期间调用，
+        // 否则会干扰游戏自身的资源加载。
+        try {
+            String s = Global.getSettings().loadText("data/strings/frontend_labels.json",
+                    FrontendSettings.MOD_ID);
+            if (s != null && !s.trim().isEmpty()) {
+                logInfo("标签文件已通过 SettingsAPI.loadText 加载");
+                return s;
+            }
+        } catch (Throwable t) {
+            logInfo("SettingsAPI.loadText 失败，改用直接文件读取: " + t);
+        }
+        final String rel = "data/strings/frontend_labels.json";
+        List<java.nio.file.Path> candidates = new ArrayList<java.nio.file.Path>();
+
+        // 1) ModSpecAPI.getPath()（游戏给的 mod 目录）
         try {
             ModSpecAPI spec = Global.getSettings().getModManager().getModSpec(FrontendSettings.MOD_ID);
             if (spec != null) {
                 String base = spec.getPath();
                 if (base != null && !base.isEmpty()) {
-                    java.nio.file.Path p = java.nio.file.Paths.get(base, "data", "strings", "frontend_labels.json");
-                    if (java.nio.file.Files.isReadable(p)) {
-                        return new String(java.nio.file.Files.readAllBytes(p), java.nio.charset.StandardCharsets.UTF_8);
-                    }
+                    candidates.add(java.nio.file.Paths.get(base, "data", "strings", "frontend_labels.json"));
+                }
+                // getPath() 万一不是目录，再用 getDirName() 拼
+                String dir = spec.getDirName();
+                if (dir != null && !dir.isEmpty()) {
+                    candidates.add(java.nio.file.Paths.get("mods", dir, "data", "strings", "frontend_labels.json"));
+                    candidates.add(java.nio.file.Paths.get(dir, "data", "strings", "frontend_labels.json"));
                 }
             }
         } catch (Throwable ignored) {
         }
-        // 退路：按工作目录下的 mods/<目录名> 查找
-        try {
-            java.nio.file.Path p = java.nio.file.Paths.get("mods", "ConsoleFrontend", "data", "strings", "frontend_labels.json");
-            if (java.nio.file.Files.isReadable(p)) {
-                return new String(java.nio.file.Files.readAllBytes(p), java.nio.charset.StandardCharsets.UTF_8);
+
+        // 2) 固定目录名
+        candidates.add(java.nio.file.Paths.get("mods", "ConsoleFrontend", "data", "strings", "frontend_labels.json"));
+        candidates.add(java.nio.file.Paths.get("..", "mods", "ConsoleFrontend", "data", "strings", "frontend_labels.json"));
+        // 3) 绝对路径兜底（游戏装在默认位置时）
+        candidates.add(java.nio.file.Paths.get("C:/Games/Starsector/mods/ConsoleFrontend", "data", "strings", "frontend_labels.json"));
+
+        StringBuilder tried = new StringBuilder();
+        for (java.nio.file.Path p : candidates) {
+            try {
+                if (java.nio.file.Files.isReadable(p)) {
+                    String s = new String(java.nio.file.Files.readAllBytes(p), java.nio.charset.StandardCharsets.UTF_8);
+                    if (s != null && !s.trim().isEmpty()) {
+                        logInfo("标签文件已加载: " + p.toAbsolutePath());
+                        return s;
+                    }
+                }
+            } catch (Throwable ignored) {
             }
-        } catch (Throwable ignored) {
+            if (tried.length() > 0) {
+                tried.append(" | ");
+            }
+            tried.append(p);
         }
         try {
-            Global.getLogger(FrontendLabels.class).warn("找不到 " + rel + "，改用自动枚举模式。");
+            Global.getLogger(FrontendLabels.class).warn(
+                    "找不到 " + rel + "，改用自动枚举模式。已尝试: " + tried);
         } catch (Throwable ignored) {
         }
         return null;
+    }
+
+    private static void logInfo(String msg) {
+        try {
+            Global.getLogger(FrontendLabels.class).info("[ConsoleFrontend] " + msg);
+        } catch (Throwable ignored) {
+        }
     }
 
     public static List<Category> sortedCategories() {

@@ -110,24 +110,81 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     private float lastW;
     private float lastH;
+    private boolean loggedRender;
+    private boolean closed;
+    private boolean mountedInDialog;
     /** 当前正在编辑的输入框 key（不依赖原生焦点机制，见 {@link #forwardKey}）。 */
     private String focusedField;
 
-    private FrontendPanel(CommandContext ctx) {
+    public FrontendPanel(CommandContext ctx) {
         this.context = ctx;
         instance = this;
-        mount();
+        try {
+            catalog.build(context);
+            info("命令目录构建完成: " + catalog.entries().size() + " 条");
+        } catch (Throwable t) {
+            warn("构建命令目录失败: " + t);
+        }
     }
 
-    public static void open(CommandContext ctx) {
+    /**
+     * 打开前端面板。
+     *
+     * <p>走<b>公共 API 对话框</b>路线（{@code showInteractionDialog} +
+     * {@code showCustomDialog}），不使用任何反射 —— 实测游戏对 mod 脚本施加了
+     * SecurityManager 限制，自建反射会被拒绝，而这条路线完全不需要反射。
+     */
+    public static void open(final CommandContext ctx) {
         if (instance != null) {
             return;
         }
+        final GameState st = Global.getCurrentState();
         try {
-            new FrontendPanel(ctx);
+            if (st == GameState.COMBAT) {
+                // 战斗中：挂一个战斗插件自绘面板（addPlugin 是公共 API）
+                Global.getCombatEngine().addPlugin(new FrontendCombatPanel(
+                        new FrontendPanel(ctx == null ? detectContext() : ctx)));
+                return;
+            }
         } catch (Throwable t) {
             instance = null;
-            warn("打开前端面板失败: " + t);
+            warnStack("战斗中打开前端面板失败: " + t, t);
+            return;
+        }
+
+        // 战役中：延后一帧再开对话框。
+        // 直接在当前输入回调里 showInteractionDialog 会与正在遍历的输入事件冲突
+        // （Console Commands 也是用一个 transient 脚本延后打开的）。
+        try {
+            Global.getSector().addTransientScript(new com.fs.starfarer.api.EveryFrameScript() {
+                private boolean done;
+
+                @Override
+                public boolean runWhilePaused() {
+                    return true;
+                }
+
+                @Override
+                public boolean isDone() {
+                    return done;
+                }
+
+                @Override
+                public void advance(float amount) {
+                    if (done) {
+                        return;
+                    }
+                    done = true;
+                    try {
+                        FrontendDialogPlugin.openDialog();
+                    } catch (Throwable t) {
+                        warnStack("打开前端面板对话框失败: " + t, t);
+                    }
+                }
+            });
+        } catch (Throwable t) {
+            instance = null;
+            warnStack("安排前端面板打开失败: " + t, t);
         }
     }
 
@@ -140,7 +197,43 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     // ================= 挂载 / 卸载 =================
 
-    private void mount() {
+    /**
+     * 由 {@link FrontendDialogDelegate} 在对话框创建时回调，拿到宿主面板。
+     * 全部后续控件都在这个 CustomPanelAPI 上构建，无需反射。
+     */
+    public void attachToDialog(CustomPanelAPI host) {
+        if (host == null) {
+            return;
+        }
+        parent = host;
+        mountedInDialog = true;
+        try {
+            lastW = host.getPosition().getWidth();
+            lastH = host.getPosition().getHeight();
+        } catch (Throwable ignored) {
+        }
+        // 暂停游戏（与 Console Commands 的行为一致）
+        try {
+            if (Global.getCurrentState() == GameState.COMBAT) {
+                wasPaused = Global.getCombatEngine().isPaused();
+                Global.getCombatEngine().setPaused(true);
+            } else if (Global.getCurrentState() == GameState.CAMPAIGN) {
+                wasPaused = Global.getSector().isPaused();
+                Global.getSector().setPaused(true);
+            }
+        } catch (Throwable ignored) {
+        }
+        rebuild();
+        info("面板已挂载到对话框: 尺寸=" + lastW + "x" + lastH
+                + " 按钮=" + interactive.size() + " | " + Reflect.status());
+    }
+
+    /** 供对话框插件判断面板是否已请求关闭。 */
+    public boolean isClosed() {
+        return closed;
+    }
+
+    private void legacyMount() {
         if (Global.getCurrentState() == GameState.COMBAT) {
             try {
                 wasPaused = Global.getCombatEngine().isPaused();
@@ -155,52 +248,97 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             }
         }
 
-        // 战役中用一个透明的提示对话框占位：既阻止其它 mod 抢输入，又不隐藏战役 UI
+        // 先拿到 screenPanel —— 占位对话框也挂在它上面，不是 CampaignUIAPI 的字段
+        Object state = null;
+        try {
+            state = AppDriver.getInstance().getCurrentState();
+        } catch (Throwable ignored) {
+        }
+        Object screenPanel = Reflect.findScreenPanel(state);
+        if (screenPanel == null) {
+            // 失败时把 state 上所有候选方法名写进日志，便于定位
+            throw new IllegalStateException("无法取得 screenPanel。"
+                    + Reflect.describePanelCandidates(state));
+        }
+        // 同样不做 instanceof 校验：脚本类加载器与 API 类加载器可能不同，
+        // 同一个接口会有两个 Class 对象，instanceof 会误判为 false。
+        // 后续全部通过接口/反射调用，不做强制类型转换。
+        UIPanelAPI sp = screenPanel instanceof UIPanelAPI ? (UIPanelAPI) screenPanel : null;
+        Object spObj = screenPanel;
+
+        // 战役中创建一个透明的提示对话框占位：
+        //   作用 —— 拦住其它 mod 与地图输入；
+        //   关键 —— 必须把它设为完全透明，否则它会盖在面板上方，
+        //          玩家只会看到一个空对话框 + 「确定」按钮（实测现象）；
+        //   查找 —— 对话框挂在 screenPanel 上，通过「含 getOptionMap 的子面板」定位，
+        //          与 Console Commands 的做法一致（原实现误从 CampaignUIAPI 取字段，永远取不到）。
         if (context != null && context.isInCampaign()) {
             try {
                 CampaignUIAPI ui = Global.getSector().getCampaignUI();
                 if (ui != null && !ui.isShowingDialog()) {
                     ui.showMessageDialog("");
-                    Object screenPanel = Reflect.get(ui, "screenPanel");
-                    Object dialog = Reflect.findChildWithMethod(screenPanel, "getOptionMap");
+                    // 官方做法是从 CampaignUIAPI 的运行时对象上取 screenPanel 字段
+                    // （接口上没有，但实现类 CampaignUI 上有），再从它的子组件里找对话框。
+                    // 两条路径都试，任一成功即可。
+                    Object dialog = null;
+                    Object uiScreenPanel = Reflect.getFieldValue(ui, "screenPanel");
+                    if (uiScreenPanel != null) {
+                        dialog = Reflect.findChildWithMethod(uiScreenPanel, "getOptionMap");
+                    }
+                    if (dialog == null) {
+                        dialog = Reflect.findChildWithMethod(spObj, "getOptionMap");
+                    }
                     if (dialog != null) {
                         Reflect.invoke(dialog, "setOpacity", Float.valueOf(0f));
                         Reflect.invoke(dialog, "setBackgroundDimAmount", Float.valueOf(0f));
                         Reflect.invoke(dialog, "setAbsorbOutsideEvents", Boolean.FALSE);
                         Reflect.invoke(dialog, "makeOptionInstant", Integer.valueOf(0));
                         placeHolderDialog = dialog;
+                        info("占位对话框已透明化: " + dialog.getClass().getName());
+                    } else {
+                        warn("screenPanel 中找不到占位对话框（getOptionMap），面板可能被遮挡");
                     }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable t) {
+                warn("创建透明占位对话框失败: " + t);
             }
         }
-
-        Object state = null;
-        try {
-            state = AppDriver.getInstance().getCurrentState();
-        } catch (Throwable ignored) {
+        Object spPos = Reflect.invoke(spObj, "getPosition");
+        float w = Global.getSettings().getScreenWidth();
+        float h = Global.getSettings().getScreenHeight();
+        if (spPos != null) {
+            Object pw = Reflect.invoke(spPos, "getWidth");
+            Object ph = Reflect.invoke(spPos, "getHeight");
+            if (pw instanceof Number) {
+                w = ((Number) pw).floatValue();
+            }
+            if (ph instanceof Number) {
+                h = ((Number) ph).floatValue();
+            }
         }
-        Object screenPanel = Reflect.invoke(state, "getScreenPanel");
-        if (!(screenPanel instanceof UIPanelAPI)) {
-            throw new IllegalStateException("无法取得 screenPanel（反射失败）");
-        }
-        UIPanelAPI sp = (UIPanelAPI) screenPanel;
-        float w = sp.getPosition() == null ? Global.getSettings().getScreenWidth() : sp.getPosition().getWidth();
-        float h = sp.getPosition() == null ? Global.getSettings().getScreenHeight() : sp.getPosition().getHeight();
         lastW = w;
         lastH = h;
 
         // 父面板始终占满 screenPanel，便于居中定位；真正的内容宽度由 bgPanel 按设置决定
         parent = Global.getSettings().createCustom(w, h, null);
-        sp.addComponent(parent);
+        Reflect.invoke(spObj, "addComponent", parent);
         parent.getPosition().inTL(0f, 0f);
+        // 提到最上层：占位对话框是后于我们之外挂到 screenPanel 上的，
+        // 不提升层级的话面板会被它压在下面（实测表现为「只有一个空对话框 + 确定按钮」）。
+        try {
+            Reflect.invoke(spObj, "bringComponentToTop", parent);
+        } catch (Throwable ignored) {
+        }
 
         try {
             catalog.build(context);
+            info("命令目录构建完成: " + catalog.entries().size() + " 条");
         } catch (Throwable t) {
             warn("构建命令目录失败: " + t);
         }
         rebuild();
+        info("面板挂载完成: screenPanel=" + spObj.getClass().getName()
+                + " 尺寸=" + w + "x" + h + " 按钮=" + interactive.size());
     }
 
     public void close() {
@@ -208,13 +346,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             ParamStore.save();
         } catch (Throwable ignored) {
         }
-        try {
-            if (placeHolderDialog != null) {
-                Reflect.invoke(placeHolderDialog, "dismiss", Integer.valueOf(0));
-                placeHolderDialog = null;
-            }
-        } catch (Throwable ignored) {
-        }
+        // 对话框路线：置标志即可，由 FrontendDialogPlugin.advance() 调用 dialog.dismiss()
+        closed = true;
         try {
             if (Global.getCurrentState() == GameState.COMBAT) {
                 if (!wasPaused) {
@@ -225,16 +358,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             }
         } catch (Throwable ignored) {
         }
-        try {
-            Object p = Reflect.invoke(parent, "getParent");
-            if (p != null) {
-                Reflect.invoke(p, "removeComponent", parent);
-            }
-        } catch (Throwable ignored) {
-        }
         parent = null;
         bgPanel = null;
         instance = null;
+    }
+
+    /** 对话框挂载完成后的标记（供诊断日志）。 */
+    public void markMountedInDialog() {
+        info("showCustomDialog 已提交");
     }
 
     // ================= 重建 =================
@@ -245,15 +376,20 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
         float fullW = parent.getPosition().getWidth();
         float fullH = parent.getPosition().getHeight();
-        float contentW = (float) (fullW * clampFraction(FrontendSettings.panelWidthFraction));
-        float contentH = Math.max(200f, fullH - 60f);
+        // 对话框路线下 parent 就是对话框给的宿主面板，直接用它的尺寸铺满
+        float contentW = fullW;
+        float contentH = fullH;
+        if (!mountedInDialog) {
+            contentW = (float) (fullW * clampFraction(FrontendSettings.panelWidthFraction));
+            contentH = Math.max(200f, fullH - 60f);
+        }
         if (bgPanel == null) {
             bgPanel = parent.createCustomPanel(contentW, contentH, this);
             parent.addComponent(bgPanel);
         } else {
             bgPanel.getPosition().setSize(contentW, contentH);
         }
-        bgPanel.getPosition().inTL((fullW - contentW) / 2f, 30f);
+        bgPanel.getPosition().inTL(mountedInDialog ? 0f : (fullW - contentW) / 2f, mountedInDialog ? 0f : 30f);
 
         clearPanel(bgPanel);
         fields.clear();
@@ -985,6 +1121,15 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             return;
         }
         try {
+            if (mountedInDialog) {
+                // 对话框路线：生命周期由 FrontendDialogPlugin 管理
+                pollFields();
+                if (needsRebuild) {
+                    needsRebuild = false;
+                    rebuild();
+                }
+                return;
+            }
             GameState st = Global.getCurrentState();
             if (st != GameState.CAMPAIGN && st != GameState.COMBAT) {
                 close();
@@ -1057,6 +1202,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     public void renderBelow(float alphaMult) {
         if (parent == null) {
             return;
+        }
+        // 对话框路线下由游戏自己绘制背景，无需全屏遮罩
+        if (mountedInDialog) {
+            return;
+        }
+        if (!loggedRender) {
+            loggedRender = true;
+            info("renderBelow 首次被调用（bgPanel=" + (bgPanel == null ? "null" : "ok") + "）");
         }
         try {
             float a = (float) FrontendSettings.backgroundDarkening;
@@ -1555,10 +1708,30 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return s.length() <= max ? s : s.substring(0, max - 1) + "…";
     }
 
+    /** 诊断日志：排查「面板没出现」这类问题时看 starsector.log 里的 [ConsoleFrontend]。 */
+    private static void info(String msg) {
+        try {
+            Global.getLogger(FrontendPanel.class).info("[ConsoleFrontend] " + msg);
+        } catch (Throwable ignored) {
+        }
+    }
+
     private static void warn(String msg) {
         try {
             Global.getLogger(FrontendPanel.class).warn(msg);
         } catch (Throwable ignored) {
+        }
+    }
+
+    /** 带栈的告警：排查反射被游戏安全策略拦截时使用。 */
+    private static void warnStack(String msg, Throwable t) {
+        try {
+            Global.getLogger(FrontendPanel.class).warn(msg, t);
+        } catch (Throwable ignored) {
+            try {
+                Global.getLogger(FrontendPanel.class).warn(msg);
+            } catch (Throwable ignored2) {
+            }
         }
     }
 
