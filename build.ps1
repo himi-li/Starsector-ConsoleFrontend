@@ -1,4 +1,4 @@
-<#
+﻿<#
     Console Frontend — 构建脚本
     用法:
         .\build.ps1                     # 编译并打包到 jars/ConsoleFrontend.jar
@@ -43,6 +43,7 @@ $classpath = @(
     (Join-Path $core 'fs.common_obf.jar'),
     (Join-Path $core 'json.jar'),
     (Join-Path $core 'lwjgl.jar'),
+    (Join-Path $core 'log4j-1.2.9.jar'),
     (Join-Path $StarsectorDir 'mods\Console Commands\jars\lw_Console.jar'),
     (Join-Path $StarsectorDir 'mods\Lunalib\jars\LunaLib.jar')
 )
