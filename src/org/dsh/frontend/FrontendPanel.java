@@ -3,6 +3,7 @@ package org.dsh.frontend;
 import com.fs.starfarer.api.GameState;
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.Script;
+import com.fs.starfarer.api.SettingsAPI;
 import com.fs.starfarer.api.campaign.BaseCustomUIPanelPlugin;
 import com.fs.starfarer.api.campaign.CampaignUIAPI;
 import com.fs.starfarer.api.campaign.InteractionDialogAPI;
@@ -559,33 +560,31 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
         float rowW = w - margin * 2f;
         float y = Y_CONTENT;
-        // 每行 30px：标题 + 参数行 + 底部按钮行；
-        // 额外 +40 给文本框的实际渲染高度留余量（请求 22 实测约占 42）。
-        float lineH = 30f;
+        // 行高 34：给原生文本框的实际渲染高度留余量（请求 24 实测约占 40）。
+        final float lineH = 34f;
         int lines = 1 + Math.max(1, e.params.size()) + 1;
-        float areaH = lines * lineH + 40f;
+        float areaH = lines * lineH + 24f;
 
         CustomPanelAPI box = newPanel(rowW, areaH);
-        // 背景板：参数区叠在按钮列表之上，没有底色会让两层文字互相穿透看不清（实测）。
-        try {
-            TooltipMakerAPI bg = box.createUIElement(rowW, areaH, false);
-            box.addUIElement(bg).inTL(0f, 0f);
-            bg.addImage(Global.getSettings().getSpriteName("ui", "panel00_center"), rowW, areaH, 0f);
-        } catch (Throwable ignored) {
-        }
+        // 九宫格背景：游戏没有整块窗口素材，panel00_* 是 32x32 的九宫格切片。
+        // 用 SolidBgPlugin 直接铺一层不透明底色（最稳），避免与下方列表区文字穿透。
+        drawPanelBackground(box, rowW, areaH);
 
         TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 26f, false);
-        box.addUIElement(tm).inTL(8f, 4f);
+        box.addUIElement(tm).inTL(12f, 6f);
         tm.setParaFontVictor14();
         tm.addPara(escapePercent("参数设置 · " + e.labelOrName()), 6f, Misc.getBrightPlayerColor());
 
-        float fy = 26f;
+        // 右侧预留：数字参数的 -/+ 两个按钮（各 30 宽）或选择器的 v 按钮（30 宽）
+        final float rightReserve = 78f;
+        final float labelW = 120f;
+        final float leftPad = 12f;
+
+        float fy = 34f;
         for (ParamSpec p : e.params) {
-            float labelW = 130f;
-            // 标签与控件用同一 y 并垂直居中；文本框实际渲染高度大于请求值时
-            // 标签偏上会显得未对齐（实测）。
+            // 标签与控件同 y、垂直居中（文本框实际渲染更高，标签偏上会显错位）
             TooltipMakerAPI lt = box.createUIElement(labelW, lineH, false);
-            box.addUIElement(lt).inTL(8f, fy);
+            box.addUIElement(lt).inTL(leftPad, fy);
             LabelAPI lab = lt.addPara(escapePercent(p.labelOrKey() + (p.required ? " *" : "")), 6f,
                     p.required ? Misc.getHighlightColor() : Misc.getGrayColor());
             try {
@@ -594,24 +593,24 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             }
 
             String key = fieldKey(e.command, p.key);
-            float ctlX = 8f + labelW;
-            float ctlW = Math.max(120f, rowW - ctlX - 210f);
+            float ctlX = leftPad + labelW;
+            // 控件宽度 = 行宽 - 标签 - 右侧预留；不要再额外减，否则右侧会溢出到行外
+            float ctlW = Math.max(80f, rowW - ctlX - rightReserve);
             String val = valueOf(e, p);
 
             if (p.isPicker()) {
-                float pickW = ctlW - 34f;
+                float pickW = Math.max(80f, ctlW - 32f);
                 textField(box, ctlX, fy, pickW, 24f, val, key);
-                // 用 v 代替 v（U+9660 在游戏字体里没有字形）
                 button(box, ctlX + pickW + 4f, fy, 28f, 24f, "v",
                         "pickopen|" + e.command + "|" + p.key,
                         escapePercent("打开" + IdSource.displayNameOf(p.source) + "选择器（可搜索，名称优先）"));
             } else if (p.isNumeric()) {
-                float stepW = 28f;
-                float fw = Math.max(80f, ctlW - (stepW + 4f) * 2f - 4f);
+                float stepW = 30f;
+                float fw = Math.max(80f, ctlW - stepW * 2f - 8f);
                 textField(box, ctlX, fy, fw, 24f, val, key);
                 button(box, ctlX + fw + 4f, fy, stepW, 24f, "-",
                         "pstep|" + e.command + "|" + p.key + "|dec", "减少");
-                button(box, ctlX + fw + stepW + 8f, fy, stepW, 24f, "+",
+                button(box, ctlX + fw + stepW + 4f, fy, stepW, 24f, "+",
                         "pstep|" + e.command + "|" + p.key + "|inc", "增加");
             } else if (ParamSpec.TYPE_BOOL.equals(p.type)) {
                 boolean on = isOn(val);
@@ -620,28 +619,34 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             } else {
                 textField(box, ctlX, fy, ctlW, 24f, val, key);
             }
-
-            if (p.hint != null && !p.hint.isEmpty()) {
-                TooltipMakerAPI ht = box.createUIElement(200f, lineH, false);
-                box.addUIElement(ht).inTL(rowW - 208f, fy + 6f);
-                ht.addPara(escapePercent(p.hint), 6f, Misc.getGrayColor());
-            }
             fy += lineH;
         }
         if (e.params.isEmpty()) {
-            TooltipMakerAPI nt = box.createUIElement(rowW - 20f, lineH, false);
-            box.addUIElement(nt).inTL(8f, fy + 6f);
+            TooltipMakerAPI nt = box.createUIElement(rowW - 24f, lineH, false);
+            box.addUIElement(nt).inTL(leftPad, fy);
             nt.addPara("该命令没有参数，点击主按钮直接执行。", 6f, Misc.getGrayColor());
             fy += lineH;
         }
 
-        TooltipMakerAPI pv = box.createUIElement(Math.max(120f, rowW - 400f), lineH, false);
-        box.addUIElement(pv).inTL(8f, fy + 6f);
+        // 底部行：三个按钮靠右固定，预览文本占据左侧剩余宽度
+        float btnW1 = 90f;
+        float btnW2 = 100f;
+        float btnW3 = 90f;
+        float gapB = 6f;
+        float btnsTotal = btnW1 + btnW2 + btnW3 + gapB * 2f;
+        float pvX = leftPad;
+        float pvW = Math.max(80f, rowW - pvX - btnsTotal - 16f);
+
+        TooltipMakerAPI pv = box.createUIElement(pvW, lineH, false);
+        box.addUIElement(pv).inTL(pvX, fy);
         previewLabel = pv.addPara(escapePercent(previewText(e)), 6f, Misc.getHighlightColor());
 
-        button(box, rowW - 300f, fy + 2f, 90f, 24f, "执行", "run|" + e.command, "用当前参数执行一次");
-        button(box, rowW - 204f, fy + 2f, 100f, 24f, "恢复默认", "reset|" + e.command, "清除该命令已记住的参数");
-        button(box, rowW - 98f, fy + 2f, 90f, 24f, "收起", "editclose", null);
+        float bx = rowW - btnsTotal - 8f;
+        button(box, bx, fy, btnW1, 24f, "执行", "run|" + e.command, "用当前参数执行一次");
+        bx += btnW1 + gapB;
+        button(box, bx, fy, btnW2, 24f, "恢复默认", "reset|" + e.command, "清除该命令已记住的参数");
+        bx += btnW2 + gapB;
+        button(box, bx, fy, btnW3, 24f, "收起", "editclose", null);
 
         place(box, margin, y);
         // 返回真实占用高度供列表区下移；必须 >= areaH，
@@ -868,6 +873,36 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
     }
 
+    /**
+     * 给面板铺一层游戏风格的九宫格背景。
+     *
+     * <p>游戏没有「整块窗口」素材：{@code panel00_*} 是 32x32 的九宫格切片
+     * （四角 + 四边 + 中心）。官方做法是用 {@code addImages(w, h, pad, pad, 九个路径)}
+     * 一次拼出可缩放的窗框（MechExpansionModule 的 MEM_MotherShipFleetInfo.java:228 有范例）。
+     * 这里直接调用它，避免自己拉伸中心图（实测单用 center 会出现条纹且不遮字）。
+     */
+    private void drawPanelBackground(CustomPanelAPI host, float w, float h) {
+        try {
+            TooltipMakerAPI bg = host.createUIElement(w, h, false);
+            host.addUIElement(bg).inTL(0f, 0f);
+            SettingsAPI s = Global.getSettings();
+            String tl = s.getSpriteName("ui", "panel00_top_left");
+            String t = s.getSpriteName("ui", "panel00_top");
+            String tr = s.getSpriteName("ui", "panel00_top_right");
+            String l = s.getSpriteName("ui", "panel00_left");
+            String c = s.getSpriteName("ui", "panel00_center");
+            String r = s.getSpriteName("ui", "panel00_right");
+            String bl = s.getSpriteName("ui", "panel00_bot_left");
+            String b = s.getSpriteName("ui", "panel00_bot");
+            String br = s.getSpriteName("ui", "panel00_bot_right");
+            // 先铺一层不透明底色，确保文字不会被下方内容穿透
+            bg.setBgAlpha(1f);
+            bg.addImages(w, h, 0f, 0f, tl, t, tr, l, c, r, bl, b, br);
+        } catch (Throwable t) {
+            warn("绘制参数区背景失败: " + t);
+        }
+    }
+
     private CustomPanelAPI newPanel(float w, float h) {
         return bgPanel.createCustomPanel(Math.max(1f, w), Math.max(1f, h), new ChildPlugin());
     }
@@ -917,17 +952,36 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return b;
     }
 
+    /**
+     * 建一个原生文本框。
+     *
+     * <p>按 RefitFilters 的 UIExtensions.kt:343-349 的写法：
+     * 用 4 参重载 {@code addTextField(w, h, font, pad)} 并<b>直接 addComponent 到宿主面板</b>，
+     * 而不是塞进自己新建的 TooltipMakerAPI。这样渲染与输入都走游戏自己的实现，
+     * ChineseInputFix 的 Win32 IME 也能正常投递中文。
+     */
     private TextFieldAPI textField(CustomPanelAPI host, float x, float y, float w, float h,
                                    String initial, String key) {
         float cw = Math.max(1f, w);
         float ch = Math.max(1f, h);
-        TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
-        host.addUIElement(tm).inTL(x, y);
-        TextFieldAPI f = tm.addTextField(cw, ch);
+        TextFieldAPI f;
+        try {
+            TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
+            host.addUIElement(tm).inTL(x, y);
+            f = tm.addTextField(cw, ch, com.fs.starfarer.api.ui.Fonts.VICTOR_10, 0f);
+        } catch (Throwable t) {
+            // 退路：3 参重载
+            TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
+            host.addUIElement(tm).inTL(x, y);
+            f = tm.addTextField(cw, ch);
+        }
         if (initial != null && !initial.isEmpty()) {
             f.setText(initial);
         }
-        f.setMaxChars(200);
+        try {
+            f.setMaxChars(200);
+        } catch (Throwable ignored) {
+        }
         interactive.add(f);
         fields.put(key, f);
         lastFieldText.put(key, initial == null ? "" : initial);
@@ -977,18 +1031,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     }
                     continue;
                 }
-                // 3) 键盘事件：聚焦字段已 grabFocus，由原生 TextField 与 IME 处理，
-                //    这里不 consume（否则会打断 IME 组合串与原生输入）。
+                // 3) 键盘事件全部交给原生控件处理（它已 grabFocus）。
+                //    我们<b>不</b> consume，否则会打断游戏原生输入与 ChineseInputFix 的 IME 组合。
                 //    仅在无聚焦时吞掉，防止穿透到战役/战斗 UI。
                 if (e.isKeyboardEvent()) {
                     if (focusedField == null) {
                         e.consume();
-                    } else if (e.isKeyDownEvent()) {
-                        int v = e.getEventValue();
-                        if (v == Keyboard.KEY_RETURN || v == Keyboard.KEY_NUMPADENTER) {
-                            commitFocused();
-                            setFocus(null);
-                        }
                     }
                     continue;
                 }
