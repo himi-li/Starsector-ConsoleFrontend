@@ -5,7 +5,6 @@ import com.fs.starfarer.api.campaign.CampaignUIAPI;
 import com.fs.starfarer.api.campaign.InteractionDialogAPI;
 import com.fs.starfarer.api.campaign.InteractionDialogPlugin;
 import com.fs.starfarer.api.campaign.OptionPanelAPI;
-import com.fs.starfarer.api.ui.CustomPanelAPI;
 import com.fs.starfarer.api.campaign.rules.MemoryAPI;
 import com.fs.starfarer.api.combat.EngagementResultAPI;
 
@@ -46,42 +45,20 @@ public class FrontendDialogPlugin implements InteractionDialogPlugin {
         float h = Math.max(300f, Global.getSettings().getScreenHeight() - MARGIN_Y * 2f);
 
         panel = new FrontendPanel(FrontendPanel.detectContext());
-        // 优先用 VisualPanelAPI.showCustomPanel：它返回 CustomPanelAPI，且
-        // 【不会生成对话框自带的确认/取消按钮】—— 从根上消除右下角那个无效的 [G]。
-        // 失败时退回 showCustomDialog。
-        boolean ok = false;
+        // 用 showCustomDialog 挂载。
+        //
+        // 曾尝试改用 VisualPanelAPI.showCustomPanel 以消除对话框自带的确认按钮，
+        // 但它把面板放进对话框的【视觉子区域】，可用尺寸被限制，
+        // 而本面板按全屏尺寸计算 → 整体错位、右侧被裁切（实测）。
+        // 因此回到 showCustomDialog；自带按钮改由 customDialogConfirm() 实现为可用。
         try {
-            com.fs.starfarer.api.campaign.VisualPanelAPI vp = dialog.getVisualPanel();
-            if (vp != null) {
-                CustomPanelAPI host = vp.showCustomPanel(w, h, panel);
-                if (host != null) {
-                    panel.attachToDialog(host);
-                    panel.markMountedInDialog();
-                    ok = true;
-                    try {
-                        Global.getLogger(FrontendDialogPlugin.class).info(
-                                "[ConsoleFrontend] 已用 showCustomPanel 挂载面板");
-                    } catch (Throwable ignored) {
-                    }
-                }
-            }
+            dialog.showCustomDialog(w, h, new FrontendDialogDelegate(panel));
+            panel.markMountedInDialog();
         } catch (Throwable t) {
             try {
                 Global.getLogger(FrontendDialogPlugin.class).warn(
-                        "[ConsoleFrontend] showCustomPanel 失败，改用 showCustomDialog: " + t);
+                        "[ConsoleFrontend] showCustomDialog 失败: " + t, t);
             } catch (Throwable ignored) {
-            }
-        }
-        if (!ok) {
-            try {
-                dialog.showCustomDialog(w, h, new FrontendDialogDelegate(panel));
-                panel.markMountedInDialog();
-            } catch (Throwable t) {
-                try {
-                    Global.getLogger(FrontendDialogPlugin.class).warn(
-                            "[ConsoleFrontend] showCustomDialog 也失败: " + t, t);
-                } catch (Throwable ignored) {
-                }
             }
         }
     }

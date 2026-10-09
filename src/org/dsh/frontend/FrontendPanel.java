@@ -426,7 +426,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         float w = bgPanel.getPosition().getWidth();
         float h = bgPanel.getPosition().getHeight();
+        // 左右各留 8px 安全边距：host 面板若比请求尺寸略窄，
+        // 用 rowW = w - margin*2 计算的右对齐元素会被裁掉（实测右列缺一半）。
         float margin = 20f;
+        if (mountedInDialog) {
+            margin = 14f;
+        }
 
         try {
             buildHeader(w, h, margin);
@@ -684,7 +689,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         TooltipMakerAPI content = area.createUIElement(rowW, areaH, true);
         area.addUIElement(content).inTL(0f, 0f);
 
-        float cellW = (rowW - gap * (cols - 1) - 14f) / cols;
+        // 再减 10px：给右边界留余量，避免最后一列被面板边缘裁切（实测右列缺一半）
+        float cellW = (rowW - gap * (cols - 1) - 24f) / cols;
         // 逐行构建：每行是一个 row 面板，行内按钮用绝对位置，行与行之间交给 addCustom 的流式布局
         for (int start = from; start < to; start += cols) {
             int end = Math.min(to, start + cols);

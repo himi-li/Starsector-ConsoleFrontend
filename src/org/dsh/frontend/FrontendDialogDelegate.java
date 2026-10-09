@@ -40,20 +40,20 @@ public class FrontendDialogDelegate extends BaseCustomDialogDelegate {
     }
 
     /**
-     * 不要对话框自带的确认按钮。
+     * 对话框自带的确认按钮。
      *
-     * <p>实测：返回 null 时游戏会渲染一个默认的【确认 [G]】按钮，但它点击后走的是
-     * {@code customDialogConfirm()}，与我们的面板逻辑无关，表现为【按钮无效】。
-     * 返回空串则不渲染该按钮 —— 关闭动作由面板自己的【关闭 (ESC)】按钮负责。
+     * <p>实测：这个按钮无法通过返回空串去掉（返回 "" 只是文字为空，按钮仍在），
+     * 所以改为<b>让它可用</b>：返回中文标签，点击后由 {@link #customDialogConfirm()}
+     * 关闭面板。这样按 G 或点它都能关闭，不再是"无效按钮"。
      */
     @Override
     public String getConfirmText() {
-        return "";
+        return "关闭 (G)";
     }
 
     @Override
     public String getCancelText() {
-        return "";
+        return null;
     }
 
     @Override
