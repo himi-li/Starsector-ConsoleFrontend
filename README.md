@@ -120,6 +120,7 @@ consolefrontend [open|close|reload|resetparams]
 ## 依赖
 
 - **必需**：Console Commands（`lw_console`）
+- **必需**：LazyLib（`lw_lazylib`）—— Console Commands 的运行依赖，需一并安装并启用。
 - **可选**：LunaLib（`lunalib`）—— 提供游戏内设置界面；未安装时使用内置默认值。
 
 ## 许可
