@@ -551,15 +551,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float rowW = w - margin * 2f;
         CustomPanelAPI row = newPanel(rowW, H_SEARCH);
 
-        // 与搜索框同高同 y，并垂直居中，否则文字会显得偏上（实测未对齐）
-        TooltipMakerAPI tm = row.createUIElement(44f, 30f, false);
-        row.addUIElement(tm).inTL(0f, 0f);
-        tm.setParaFont(FONT_PARA);
-        LabelAPI searchLab = tm.addPara("搜索", 8f, Misc.getGrayColor());
-        try {
-            searchLab.setAlignment(Alignment.LMID);
-        } catch (Throwable ignored) {
-        }
+        // 与搜索框同 x/y/高，靠 textLabel 的按钮式居中保证同带对齐。
+        // 早先用 addPara + Alignment.LMID，截图像素实测标签比输入框低 46 图像像素
+        //（约 29 逻辑像素），故改用 textLabel，理由见其注释。
+        textLabel(row, 0f, 0f, 44f, H_SEARCH_FIELD, "搜索", Misc.getGrayColor());
 
         // 右侧两个按钮各 112 宽，从 rowW-240 与 rowW-122 起；
         // 输入框必须在其左侧留出间隙（这里留 12px），否则会横向压到按钮上。
@@ -1080,6 +1075,40 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             }, TooltipMakerAPI.TooltipLocation.BELOW);
         }
         interactive.add(b);
+        return b;
+    }
+
+    /** 纯文字标签的递增计数，只用于生成互不相同的控件 id。 */
+    private int labelSeq = 0;
+
+    /**
+     * 画一段纯文字标签（不可点击的透明按钮）。
+     *
+     * <p>反汇编 {@code StandardTooltipV2Expandable.addPara(String,Color,float)} 后确认：
+     * addPara 生成的标签是<b>相对前一个元素</b>摆放的（首个元素 {@code inTL(0, pad)}，
+     * 之后 {@code belowLeft(prev, pad)}），落点还受容器尺寸与 {@code autoSizeToWidth}
+     * 的结果影响，因此无法用一个统一常数把标签校到与输入框同一条带。
+     * 截图像素实测：同一行内文本框填充带与按钮填充带（y 141..175）完全重合，
+     * 而 addPara 标签的 ink 落在 y 187..207；日志区标题却只低约 8 像素 ⇒ 偏移量不一致。
+     *
+     * <p>改为用「透明、不可点击的按钮」画文字：按钮与输入框走同一套定位与垂直居中，
+     * 天然对齐。代价是按钮字体只能取 {@code setButtonFont*} 里的 Victor14
+     *（没有 setButtonFont(String)），比正文的 {@link #FONT_PARA}（victor16）略小。
+     * 刻意<b>不</b>把自己加进 {@code interactive} 列表：它只是文字，不参与点击与命中判定。
+     */
+    private ButtonAPI textLabel(CustomPanelAPI host, float x, float y, float w, float h,
+                                String text, Color color) {
+        float cw = Math.max(1f, w);
+        float ch = Math.max(1f, h);
+        TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
+        host.addUIElement(tm).inTL(x, y);
+        tm.setButtonFontVictor14();
+        ButtonAPI b = tm.addButton(text, "label|" + (labelSeq++) + "|" + text, color, new Color(0, 0, 0, 0),
+                Alignment.MID, CutStyle.NONE, cw, ch, 0f);
+        try {
+            b.setClickable(false);
+        } catch (Throwable ignored) {
+        }
         return b;
     }
 
