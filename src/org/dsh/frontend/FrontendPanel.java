@@ -32,6 +32,7 @@ import org.lwjgl.opengl.GL11;
 
 import java.awt.Color;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -122,6 +123,20 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     /** 日志滚动器是否支持 {@code scrollToBottom()}（需经反射调用，见 buildLogArea 注释）。 */
     private boolean logScrollToBottom;
 
+    /**
+     * 日志区当前页（0 = 最新一行在最上方）。
+     *
+     * <p>日志区改成一页一屏 + 最新在上：整页正好铺满可视高度，既不会被下边缘裁掉，
+     * 也不依赖那个始终画不出来的滚动条；翻页由「上一页 / 下一页」按钮或滚轮完成。
+     */
+    private int logPage = 0;
+
+    /** 日志区面板的位置，用于判断滚轮是否落在日志区上。 */
+    private PositionAPI logAreaPos;
+
+    /** 上一次构建日志时输出串的长度；一变就跳回第 1 页。 */
+    private int logSeenLen = -1;
+
     // ---- 纵向布局常量（自上而下，单位像素）----
     //
     // 注意：原版 TextFieldAPI 的<b>实际渲染高度大于请求高度</b>——
@@ -142,6 +157,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     /** 参数区 / 按钮列表区的起始 y。 */
     private static final float Y_CONTENT = 152f;
+
+    /** 日志区高度（比早期的 150 加高，一页能多显示两行）。 */
+    private static final float LOG_AREA_H = 190f;
+
+    /** 日志正文行高（victor16 行高 18，留 1px 余量）。 */
+    private static final float LOG_LINE_H = 19f;
 
     /**
      * 正文 / 标签 / 文本框字体。
@@ -483,6 +504,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         previewLabel = null;
         logScroller = null;
         logScrollToBottom = false;
+        logAreaPos = null;
         focusedField = null;
 
         float w = bgPanel.getPosition().getWidth();
@@ -725,7 +747,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private void buildListArea(float w, float h, float margin, float paramsH) {
         float rowW = w - margin * 2f;
         float y = Y_CONTENT + paramsH;
-        float bottom = FrontendSettings.showOutputLog ? 200f : 40f;
+        // 210 而不是早期的 200：日志区加高到 190 且底部留白 14，需要相应下移列表区下边界。
+        float bottom = FrontendSettings.showOutputLog ? 212f : 40f;
         float areaH = Math.max(140f, h - y - bottom);
 
         List<CatalogEntry> list = catalog.filter(category, query, FrontendSettings.showUnavailable);
@@ -800,27 +823,71 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             return;
         }
         float rowW = w - margin * 2f;
-        float areaH = 150f;
-        float y = h - areaH - 20f;
+        float areaH = LOG_AREA_H;
+        float y = h - areaH - 14f;
 
         CustomPanelAPI area = newPanel(rowW, areaH);
-        TooltipMakerAPI tm = area.createUIElement(rowW - 110f, 32f, false);
-        area.addUIElement(tm).inTL(8f, 4f);
-        tm.setParaFont(FONT_PARA);
-        tm.addPara("命令输出", 6f, Misc.getBrightPlayerColor());
-
-        button(area, rowW - 100f, 2f, 92f, 22f, "清空日志", "clearlog", "清空控制台输出缓冲");
+        logAreaPos = area.getPosition();
 
         String out = "";
         try {
             out = ConsoleOverlayPanel.getOutput();
         } catch (Throwable ignored) {
         }
-        String tail = tailLines(out, FrontendSettings.logLines);
+        if (out == null) {
+            out = "";
+        }
+        // 输出长度一变就跳回第 1 页（最新），避免玩家正翻着旧页时内容被顶走。
+        if (out.length() != logSeenLen) {
+            logSeenLen = out.length();
+            logPage = 0;
+        }
+
+        List<String> lines = logLines(out, FrontendSettings.logLines);
+        // 倒序：最新的一行排到最上方。
+        Collections.reverse(lines);
+
+        int perPage = Math.max(1, (int) ((areaH - 52f) / LOG_LINE_H));
+        int pages = Math.max(1, (int) Math.ceil(lines.size() / (double) perPage));
+        if (logPage >= pages) {
+            logPage = pages - 1;
+        }
+        if (logPage < 0) {
+            logPage = 0;
+        }
+        int from = logPage * perPage;
+        int to = Math.min(lines.size(), from + perPage);
+
+        StringBuilder buf = new StringBuilder();
+        for (int i = from; i < to; i++) {
+            if (buf.length() > 0) {
+                buf.append('\n');
+            }
+            buf.append(lines.get(i));
+        }
+        String pageText = buf.length() == 0 ? "（暂无输出）" : buf.toString();
+
+        // 标题里顺带报行数与页码：整页正好铺满一屏，不再需要视觉滚动条。
+        String title = "命令输出";
+        if (pages > 1) {
+            title = title + "      共 " + lines.size() + " 行 · 第 " + (logPage + 1) + "/" + pages
+                    + " 页（滚轮或右侧按钮翻页）";
+        }
+        TooltipMakerAPI tm = area.createUIElement(Math.max(120f, rowW - 320f), 32f, false);
+        area.addUIElement(tm).inTL(8f, 4f);
+        tm.setParaFont(FONT_PARA);
+        tm.addPara(escapePercent(title), 6f, Misc.getBrightPlayerColor());
+
+        button(area, rowW - 100f, 2f, 92f, 22f, "清空日志", "clearlog", "清空控制台输出缓冲");
+        if (pages > 1 && rowW > 400f) {
+            button(area, rowW - 170f, 2f, 64f, 22f, "下一页", "logpage|next", "查看更早的输出（滚轮向下同理）");
+            button(area, rowW - 240f, 2f, 64f, 22f, "上一页", "logpage|prev", "回到更新的输出（滚轮向上同理）");
+        }
+
         TooltipMakerAPI log = area.createUIElement(rowW - 16f, areaH - 44f, true);
         area.addUIElement(log).inTL(8f, 40f);
         log.setParaFont(FONT_PARA);
-        log.addPara(escapePercent(tail.isEmpty() ? "（暂无输出）" : tail), 6f, Misc.getTextColor());
+        log.addPara(escapePercent(pageText), 6f, Misc.getTextColor());
         // 只记录滚动器，滚动动作交给 advance() 每帧执行。
         //
         // 【重要】绝不能写成 sc.setYOffset(Float.MAX_VALUE)：
@@ -1239,10 +1306,18 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 if (e.isKeyboardEvent()) {
                     continue;
                 }
-                // 4) 滚轮：选择器打开时翻页（一格一页）；其余情况吞掉，避免滚到战役/战斗 UI。
+                // 4) 滚轮：选择器打开时翻页（一格一页）；鼠标落在日志区上时也翻页；
+                //    其余情况吞掉，避免滚到战役/战斗 UI。
                 if (e.isMouseScrollEvent()) {
                     if (pickerOpen) {
                         pickerScroll(e.getEventValue());
+                    } else {
+                        try {
+                            if (logAreaPos != null && logAreaPos.containsEvent(e)) {
+                                logScroll(e.getEventValue());
+                            }
+                        } catch (Throwable ignored) {
+                        }
                     }
                     e.consume();
                 }
@@ -1268,6 +1343,23 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         pickerPage += wheelDelta > 0 ? -1 : 1;
         if (pickerPage < 0) {
             pickerPage = 0;
+        }
+        needsRebuild = true;
+    }
+
+    /**
+     * 日志区滚轮翻页。
+     *
+     * <p>与选择器同一套语义：上滚往前（更新的输出）、下滚往后（更早的输出），一格一页。
+     * 上下界由 {@link #buildLogArea} 钳位。
+     */
+    private void logScroll(int wheelDelta) {
+        if (wheelDelta == 0) {
+            return;
+        }
+        logPage += wheelDelta > 0 ? -1 : 1;
+        if (logPage < 0) {
+            logPage = 0;
         }
         needsRebuild = true;
     }
@@ -1671,6 +1763,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     pickerPage = 0;
                 }
                 needsRebuild = true;
+            } else if (id.startsWith("logpage|")) {
+                logPage += "next".equals(id.substring(8)) ? 1 : -1;
+                if (logPage < 0) {
+                    logPage = 0;
+                }
+                needsRebuild = true;
             } else if (id.startsWith("tab|")) {
                 commitFields();
                 category = id.substring(4);
@@ -1705,6 +1803,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     ConsoleOverlayPanel.setOutput("");
                 } catch (Throwable ignored) {
                 }
+                logPage = 0;
+                logSeenLen = -1;
                 needsRebuild = true;
             } else if ("close".equals(id)) {
                 close();
@@ -2069,20 +2169,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     // ================= 工具 =================
 
-    private static String tailLines(String text, int maxLines) {
-        if (text == null || text.isEmpty()) {
-            return "";
-        }
-        String[] lines = text.split("\n", -1);
-        int start = Math.max(0, lines.length - maxLines);
-        StringBuilder sb = new StringBuilder();
-        for (int i = start; i < lines.length; i++) {
-            if (sb.length() > 0) {
-                sb.append('\n');
+    /**
+     * 取输出的最后 maxLines 行（时间正序）。
+     *
+     * <p>日志区现在一页一屏、最新在最上方，所以这里只负责截断尾部（保留最近的内容）；
+     * 倒序与分页都交给 {@link #buildLogArea}。
+     */
+    private static List<String> logLines(String text, int maxLines) {
+        List<String> all = new ArrayList<String>();
+        if (text != null && !text.isEmpty()) {
+            String[] parts = text.split("\n", -1);
+            for (String p : parts) {
+                all.add(p);
             }
-            sb.append(lines[i]);
         }
-        return sb.toString();
+        int max = Math.max(1, maxLines);
+        if (all.size() > max) {
+            return new ArrayList<String>(all.subList(all.size() - max, all.size()));
+        }
+        return all;
     }
 
     /**
