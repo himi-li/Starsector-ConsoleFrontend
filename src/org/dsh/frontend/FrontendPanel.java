@@ -108,6 +108,26 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private boolean needsRebuild;
     private String statusLine = "";
 
+    // ---- 纵向布局常量（自上而下，单位像素）----
+    //
+    // 注意：原版 TextFieldAPI 的<b>实际渲染高度大于请求高度</b>——
+    // 请求 24px 时实测约占 40px（与字体行高有关）。因此行距不能按请求高度算，
+    // 必须按「最坏情况渲染高度」留白，否则搜索框底部会压到下一行的标签栏。
+    // 下面每行的可用高度都按 40px 预留。
+    private static final float Y_HEADER = 8f;
+    private static final float H_HEADER = 30f;
+
+    private static final float Y_SEARCH = 46f;
+    private static final float H_SEARCH = 34f;
+    /** 搜索框请求高度（实际渲染更高，故下一行要按 40px 预留）。 */
+    private static final float H_SEARCH_FIELD = 24f;
+
+    private static final float Y_CATEGORY = 100f;
+    private static final float H_CATEGORY = 30f;
+
+    /** 参数区 / 按钮列表区的起始 y。 */
+    private static final float Y_CONTENT = 145f;
+
     private float lastW;
     private float lastH;
     private boolean loggedRender;
@@ -439,31 +459,33 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     private void buildHeader(float w, float h, float margin) {
         float rowW = w - margin * 2f;
-        CustomPanelAPI row = newPanel(rowW, 30f);
+        CustomPanelAPI row = newPanel(rowW, H_HEADER);
 
-        TooltipMakerAPI tm = row.createUIElement(rowW - 140f, 30f, false);
-        row.addUIElement(tm).inTL(0f, 0f);
+        TooltipMakerAPI tm = row.createUIElement(rowW - 140f, H_HEADER, false);
+        row.addUIElement(tm).inTL(0f, 4f);
         tm.setParaFontVictor14();
         tm.addPara("控制台前端 · 命令按钮    热键 " + FrontendSettings.hotkeyText(), 6f, Misc.getBrightPlayerColor());
 
         button(row, rowW - 130f, 2f, 124f, 24f, "关闭 (ESC)", "close", "关闭面板并恢复游戏状态");
-        place(row, margin, 12f);
+        place(row, margin, Y_HEADER);
     }
 
     private void buildSearchRow(float w, float h, float margin) {
         float rowW = w - margin * 2f;
-        CustomPanelAPI row = newPanel(rowW, 30f);
+        CustomPanelAPI row = newPanel(rowW, H_SEARCH);
 
-        TooltipMakerAPI tm = row.createUIElement(44f, 30f, false);
-        row.addUIElement(tm).inTL(0f, 8f);
+        TooltipMakerAPI tm = row.createUIElement(44f, H_SEARCH, false);
+        row.addUIElement(tm).inTL(0f, 10f);
         tm.addPara("搜索", 6f, Misc.getGrayColor());
 
-        float fieldW = Math.max(120f, rowW - 250f);
-        textField(row, 44f, 2f, fieldW, 24f, query, "search");
+        // 右侧两个按钮各 112 宽，从 rowW-240 与 rowW-122 起；
+        // 输入框必须在其左侧留出间隙（这里留 12px），否则会横向压到按钮上。
+        float fieldW = Math.max(120f, rowW - 44f - 250f - 12f);
+        textField(row, 44f, 2f, fieldW, H_SEARCH_FIELD, query, "search");
 
-        button(row, rowW - 240f, 2f, 112f, 24f, "刷新目录", "refresh", "重新读取全部命令与 ID 列表");
-        button(row, rowW - 122f, 2f, 112f, 24f, "清空搜索", "clearsearch", null);
-        place(row, margin, 52f);
+        button(row, rowW - 240f, 0f, 112f, 24f, "刷新目录", "refresh", "重新读取全部命令与 ID 列表");
+        button(row, rowW - 122f, 0f, 112f, 24f, "清空搜索", "clearsearch", null);
+        place(row, margin, Y_SEARCH);
     }
 
     private void buildCategoryRow(float w, float h, float margin) {
@@ -483,18 +505,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         float gap = 4f;
         float bw = Math.min(150f, (rowW - gap * (cats.size() - 1)) / Math.max(1, cats.size()));
-        float rowH = 26f;
-        CustomPanelAPI row = newPanel(rowW, rowH);
+        CustomPanelAPI row = newPanel(rowW, H_CATEGORY);
         float x = 0f;
         for (String id : cats) {
             String name = "all".equals(id) ? "全部" : categoryName(id);
-            ButtonAPI b = button(row, x, 0f, bw, rowH - 2f, name, "tab|" + id, null);
+            ButtonAPI b = button(row, x, 0f, bw, H_CATEGORY - 4f, name, "tab|" + id, null);
             if (id.equals(category)) {
                 b.setEnabled(false);
             }
             x += bw + gap;
         }
-        place(row, margin, 88f);
+        place(row, margin, Y_CATEGORY);
     }
 
     private String categoryName(String id) {
@@ -513,7 +534,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             return 0f;
         }
         float rowW = w - margin * 2f;
-        float y = 122f;
+        float y = Y_CONTENT;
         float lineH = 30f;
         int lines = 1 + Math.max(1, e.params.size()) + 1;
         float areaH = lines * lineH + 16f;
@@ -587,7 +608,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     private void buildListArea(float w, float h, float margin, float paramsH) {
         float rowW = w - margin * 2f;
-        float y = 122f + paramsH;
+        float y = Y_CONTENT + paramsH;
         float bottom = FrontendSettings.showOutputLog ? 200f : 40f;
         float areaH = Math.max(140f, h - y - bottom);
 
@@ -660,7 +681,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
         float rowW = w - margin * 2f;
         float areaH = 150f;
-        float y = h - areaH - 30f;
+        float y = h - areaH - 20f;
 
         CustomPanelAPI area = newPanel(rowW, areaH);
         TooltipMakerAPI tm = area.createUIElement(rowW - 110f, 26f, false);
@@ -694,7 +715,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float rowW = Math.min(780f, w - margin * 2f);
         float areaH = Math.min(520f, h - 200f);
         float x = (w - rowW) / 2f;
-        float y = 140f;
+        float y = Y_CONTENT + 10f;
 
         CustomPanelAPI box = newPanel(rowW, areaH);
         TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 26f, false);
