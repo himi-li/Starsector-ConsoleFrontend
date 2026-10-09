@@ -403,7 +403,8 @@
           "label": "特殊物品",
           "type": "id",
           "source": "special",
-          "default": "ship_bp"
+          "default": "ship_bp",
+          "required": true
         },
         {
           "key": "data",
@@ -464,17 +465,8 @@
       "label": "解锁全部蓝图",
       "category": "market",
       "confirm": true,
-      "desc": "解锁全部舰船 / 武器 / 战机蓝图（不含工业）",
-      "params": [
-        {
-          "key": "types",
-          "label": "类型（可空/多选）",
-          "type": "text",
-          "default": "",
-          "hint": "ships wings weapons industries"
-        }
-      ],
-      "run": "allblueprints %types%"
+      "desc": "解锁全部舰船 / 武器 / 战机蓝图（不含工业）。想只解锁部分类型，请用控制台执行 allblueprints ships wings weapons industries",
+      "run": "allblueprints"
     },
     "repair": {
       "label": "全部修复",
@@ -530,7 +522,8 @@
           "label": "派系",
           "type": "id",
           "source": "faction",
-          "default": "player"
+          "default": "player",
+          "required": true
         },
         {
           "key": "name",
@@ -782,7 +775,8 @@
           "label": "星系",
           "type": "id",
           "source": "system",
-          "default": ""
+          "default": "",
+          "required": true
         }
       ],
       "run": "jump %system%"
@@ -797,7 +791,8 @@
           "label": "目标",
           "type": "id",
           "source": "market+system",
-          "default": ""
+          "default": "",
+          "required": true
         }
       ],
       "run": "goto %location%"
@@ -867,7 +862,8 @@
           "label": "舰船",
           "type": "id",
           "source": "ship",
-          "default": ""
+          "default": "",
+          "required": true
         }
       ],
       "run": "findship %hull%"
@@ -881,7 +877,8 @@
           "label": "物品",
           "type": "id",
           "source": "commodity+special",
-          "default": ""
+          "default": "",
+          "required": true
         }
       ],
       "run": "finditem %item%"
@@ -896,7 +893,8 @@
           "label": "派系",
           "type": "id",
           "source": "faction",
-          "default": "hegemony"
+          "default": "hegemony",
+          "required": true
         }
       ],
       "run": "setcommission %faction%"
@@ -954,7 +952,8 @@
           "label": "派系",
           "type": "id",
           "source": "faction",
-          "default": "hegemony"
+          "default": "hegemony",
+          "required": true
         }
       ],
       "run": "factioninfo %faction%"
@@ -973,7 +972,8 @@
           "label": "条件",
           "type": "id",
           "source": "condition",
-          "default": "habitable"
+          "default": "habitable",
+          "required": true
         }
       ],
       "run": "addcondition %condition%"
@@ -1001,7 +1001,8 @@
           "label": "工业",
           "type": "id",
           "source": "industry",
-          "default": "heavyindustry"
+          "default": "heavyindustry",
+          "required": true
         }
       ],
       "run": "addindustry %industry%"
@@ -1029,7 +1030,8 @@
           "label": "子市场",
           "type": "id",
           "source": "submarket",
-          "default": "open_market"
+          "default": "open_market",
+          "required": true
         }
       ],
       "run": "addsubmarket %submarket%"
@@ -1086,7 +1088,8 @@
           "label": "市场",
           "type": "id",
           "source": "market",
-          "default": ""
+          "default": "",
+          "required": true
         }
       ],
       "run": "openmarket %market%"
@@ -1175,7 +1178,8 @@
           "key": "mod",
           "label": "Mod ID",
           "type": "text",
-          "default": ""
+          "default": "",
+          "required": true
         }
       ],
       "run": "modinfo %mod%"
@@ -1232,7 +1236,8 @@
           "key": "alias",
           "label": "别名",
           "type": "text",
-          "default": ""
+          "default": "",
+          "required": true
         },
         {
           "key": "commands",
@@ -1251,7 +1256,8 @@
           "key": "code",
           "label": "Java 代码",
           "type": "text",
-          "default": ""
+          "default": "",
+          "required": true
         }
       ],
       "run": "runcode %code%"

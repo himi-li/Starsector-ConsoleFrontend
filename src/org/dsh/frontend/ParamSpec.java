@@ -25,6 +25,8 @@ public class ParamSpec {
     public String secondary = "id";
     public boolean searchable = true;
     public String hint = "";
+    /** 必填：值为空时点击主按钮不会执行，而是展开参数区提示填写。 */
+    public boolean required = false;
 
     public boolean isNumeric() {
         return TYPE_INT.equals(type) || TYPE_FLOAT.equals(type);

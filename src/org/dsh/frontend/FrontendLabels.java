@@ -147,6 +147,7 @@ public final class FrontendLabels {
                             spec.secondary = p.optString("secondary", "id");
                             spec.searchable = p.optBoolean("searchable", true);
                             spec.hint = p.optString("hint", "");
+                            spec.required = p.optBoolean("required", false);
                             if (p.has("min")) {
                                 spec.min = p.optDouble("min");
                             }

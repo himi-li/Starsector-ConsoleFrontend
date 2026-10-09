@@ -36,8 +36,16 @@ import java.util.Map;
 /**
  * 控制台前端面板：热键呼出的覆盖层，点击按钮即自动执行对应的 Console Commands 命令。
  *
- * 带参数的命令支持自定义参数并记住（ParamStore）；ID 类参数提供
+ * <p>带参数的命令支持自定义参数并记住（{@link ParamStore}）；ID 类参数提供
  * 「游戏内名称优先、ID 作为注释」的可搜索下拉选择器，同时允许直接输入。
+ *
+ * <p>实现要点（对照已装 Mod 的可用写法）：
+ * <ul>
+ *   <li>覆盖层通过反射挂到 {@code screenPanel} 上（与 Console Commands 的 V2 面板同路线）。</li>
+ *   <li>只有主面板使用本插件；子面板使用 {@link ChildPlugin}，它把 buttonPressed 转发回来但
+ *       不参与渲染 —— 否则全屏遮罩会被每个子面板重复绘制，互相覆盖。</li>
+ *   <li>控件先 addUIElement 挂到面板、再 addButton/addTextField，确保按钮的监听器能找到宿主面板。</li>
+ * </ul>
  */
 public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
@@ -49,6 +57,19 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     public static boolean isOpen() {
         return instance != null;
+    }
+
+    /** 子面板插件：转发按钮事件，但不渲染（避免全屏遮罩重复绘制）。 */
+    private class ChildPlugin extends BaseCustomUIPanelPlugin {
+        @Override
+        public void buttonPressed(Object buttonId) {
+            FrontendPanel.this.buttonPressed(buttonId);
+        }
+
+        @Override
+        public void processInput(List<InputEventAPI> events) {
+            FrontendPanel.this.processInput(events);
+        }
     }
 
     // ---------- 状态 ----------
@@ -78,6 +99,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     private final Map<String, TextFieldAPI> fields = new LinkedHashMap<String, TextFieldAPI>();
     private final Map<String, String> lastFieldText = new LinkedHashMap<String, String>();
+    private final List<UIComponentAPI> interactive = new ArrayList<UIComponentAPI>();
     private LabelAPI previewLabel;
     private boolean needsRebuild;
     private String statusLine = "";
@@ -217,6 +239,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         clearPanel(bgPanel);
         fields.clear();
         lastFieldText.clear();
+        interactive.clear();
         previewLabel = null;
 
         float w = bgPanel.getPosition().getWidth();
@@ -263,9 +286,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         CustomPanelAPI row = newPanel(rowW, 30f);
 
         TooltipMakerAPI tm = row.createUIElement(rowW - 140f, 30f, false);
-        tm.setParaFontVictor14();
-        tm.addPara("控制台前端 · 命令按钮", 6f, Misc.getBrightPlayerColor());
         row.addUIElement(tm).inTL(0f, 0f);
+        tm.setParaFontVictor14();
+        tm.addPara("控制台前端 · 命令按钮    热键 " + FrontendSettings.hotkeyText(), 6f, Misc.getBrightPlayerColor());
 
         button(row, rowW - 130f, 2f, 124f, 24f, "关闭 (ESC)", "close", "关闭面板并恢复游戏状态");
         place(row, margin, 12f);
@@ -276,12 +299,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         CustomPanelAPI row = newPanel(rowW, 30f);
 
         TooltipMakerAPI tm = row.createUIElement(44f, 30f, false);
-        tm.addPara("搜索", 6f, Misc.getGrayColor());
         row.addUIElement(tm).inTL(0f, 8f);
+        tm.addPara("搜索", 6f, Misc.getGrayColor());
 
-        float fieldW = rowW - 250f;
-        TextFieldAPI f = textField(row, 44f, 2f, fieldW, 24f, query, "search");
-        f.setMaxChars(120);
+        float fieldW = Math.max(120f, rowW - 250f);
+        textField(row, 44f, 2f, fieldW, 24f, query, "search");
 
         button(row, rowW - 240f, 2f, 112f, 24f, "刷新目录", "refresh", "重新读取全部命令与 ID 列表");
         button(row, rowW - 122f, 2f, 112f, 24f, "清空搜索", "clearsearch", null);
@@ -341,17 +363,18 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float areaH = lines * lineH + 16f;
 
         CustomPanelAPI box = newPanel(rowW, areaH);
-        TooltipMakerAPI tm = box.createUIElement(rowW, areaH, false);
+        TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 26f, false);
+        box.addUIElement(tm).inTL(8f, 4f);
         tm.setParaFontVictor14();
         tm.addPara("参数设置 · " + e.labelOrName(), 6f, Misc.getBrightPlayerColor());
-        box.addUIElement(tm).inTL(8f, 4f);
 
         float fy = 26f;
         for (ParamSpec p : e.params) {
-            float labelW = 120f;
+            float labelW = 130f;
             TooltipMakerAPI lt = box.createUIElement(labelW, lineH, false);
-            lt.addPara(p.labelOrKey(), 6f, Misc.getGrayColor());
             box.addUIElement(lt).inTL(8f, fy + 6f);
+            lt.addPara(p.labelOrKey() + (p.required ? " *" : ""), 6f,
+                    p.required ? Misc.getHighlightColor() : Misc.getGrayColor());
 
             String key = fieldKey(e.command, p.key);
             float ctlX = 8f + labelW;
@@ -362,7 +385,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 float pickW = ctlW - 34f;
                 textField(box, ctlX, fy + 2f, pickW, 24f, val, key);
                 button(box, ctlX + pickW + 4f, fy + 2f, 28f, 24f, "▼",
-                        "pickopen|" + e.command + "|" + p.key, "打开" + IdSource.displayNameOf(p.source) + "选择器");
+                        "pickopen|" + e.command + "|" + p.key,
+                        "打开" + IdSource.displayNameOf(p.source) + "选择器（可搜索，名称优先）");
             } else if (p.isNumeric()) {
                 float stepW = 28f;
                 float fw = Math.max(80f, ctlW - (stepW + 4f) * 2f - 4f);
@@ -379,21 +403,21 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
             if (p.hint != null && !p.hint.isEmpty()) {
                 TooltipMakerAPI ht = box.createUIElement(200f, lineH, false);
-                ht.addPara(p.hint, 6f, Misc.getGrayColor());
                 box.addUIElement(ht).inTL(rowW - 208f, fy + 6f);
+                ht.addPara(p.hint, 6f, Misc.getGrayColor());
             }
             fy += lineH;
         }
         if (e.params.isEmpty()) {
             TooltipMakerAPI nt = box.createUIElement(rowW - 20f, lineH, false);
-            nt.addPara("该命令没有参数，点击主按钮直接执行。", 6f, Misc.getGrayColor());
             box.addUIElement(nt).inTL(8f, fy + 6f);
+            nt.addPara("该命令没有参数，点击主按钮直接执行。", 6f, Misc.getGrayColor());
             fy += lineH;
         }
 
         TooltipMakerAPI pv = box.createUIElement(Math.max(120f, rowW - 400f), lineH, false);
-        previewLabel = pv.addPara(previewText(e), 6f, Misc.getHighlightColor());
         box.addUIElement(pv).inTL(8f, fy + 6f);
+        previewLabel = pv.addPara(previewText(e), 6f, Misc.getHighlightColor());
 
         button(box, rowW - 300f, fy + 2f, 90f, 24f, "执行", "run|" + e.command, "用当前参数执行一次");
         button(box, rowW - 204f, fy + 2f, 100f, 24f, "恢复默认", "reset|" + e.command, "清除该命令已记住的参数");
@@ -430,41 +454,39 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         area.addUIElement(content).inTL(0f, 0f);
 
         float cellW = (rowW - gap * (cols - 1) - 14f) / cols;
-        for (int i = from; i < to; i++) {
-            final CatalogEntry e = list.get(i);
-            int idx = i - from;
-            float cx = (idx % cols) * (cellW + gap);
-            float cy = (idx / cols) * rowH;
+        // 逐行构建：每行是一个 row 面板，行内按钮用绝对位置，行与行之间交给 addCustom 的流式布局
+        for (int start = from; start < to; start += cols) {
+            int end = Math.min(to, start + cols);
+            float rowW2 = (end - start) * cellW + (end - start - 1) * gap;
+            CustomPanelAPI rowPanel = newPanel(rowW2, FrontendSettings.buttonHeight);
+            for (int i = start; i < end; i++) {
+                final CatalogEntry e = list.get(i);
+                float cx = (i - start) * (cellW + gap);
 
-            boolean hasEdit = e.hasParams();
-            float editW = hasEdit ? 24f : 0f;
-            float mainW = cellW - editW - (hasEdit ? 3f : 0f);
+                boolean hasEdit = e.hasParams();
+                float editW = hasEdit ? 24f : 0f;
+                float mainW = cellW - editW - (hasEdit ? 3f : 0f);
 
-            CustomPanelAPI cell = newPanel(cellW, FrontendSettings.buttonHeight);
-            ButtonAPI main = button(cell, 0f, 0f, mainW, FrontendSettings.buttonHeight,
-                    e.labelOrName(), "cmd|" + e.command, e.describe());
-            if (!e.applicable) {
-                main.setEnabled(false);
+                ButtonAPI main = button(rowPanel, cx, 0f, mainW, FrontendSettings.buttonHeight,
+                        e.labelOrName(), "cmd|" + e.command, e.describe());
+                if (!e.applicable) {
+                    main.setEnabled(false);
+                }
+                if (hasEdit) {
+                    button(rowPanel, cx + mainW + 3f, 0f, editW, FrontendSettings.buttonHeight, "⚙",
+                            "edit|" + e.command, "调整「" + e.labelOrName() + "」的参数");
+                }
             }
-            if (hasEdit) {
-                button(cell, mainW + 3f, 0f, editW, FrontendSettings.buttonHeight, "⚙",
-                        "edit|" + e.command, "调整「" + e.labelOrName() + "」的参数");
-            }
-            UIComponentAPI added = content.addCustom(cell, 0f);
-            if (added != null) {
-                added.getPosition().inTL(cx, cy);
-            } else {
-                cell.getPosition().inTL(cx, cy);
-            }
+            content.addCustom(rowPanel, 4f);
         }
 
         TooltipMakerAPI footer = area.createUIElement(Math.max(120f, rowW - 280f), 26f, false);
+        area.addUIElement(footer).inTL(6f, areaH - 24f);
         String info = "共 " + list.size() + " 条 · 第 " + (page + 1) + "/" + pages + " 页";
         if (statusLine != null && !statusLine.isEmpty()) {
             info = statusLine + "    " + info;
         }
         footer.addPara(info, 6f, Misc.getGrayColor());
-        area.addUIElement(footer).inTL(6f, areaH - 24f);
 
         if (pages > 1) {
             button(area, rowW - 260f, areaH - 26f, 80f, 22f, "上一页", "page|prev", null);
@@ -484,9 +506,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         CustomPanelAPI area = newPanel(rowW, areaH);
         TooltipMakerAPI tm = area.createUIElement(rowW - 110f, 26f, false);
+        area.addUIElement(tm).inTL(8f, 4f);
         tm.setParaFontVictor14();
         tm.addPara("命令输出", 6f, Misc.getBrightPlayerColor());
-        area.addUIElement(tm).inTL(8f, 4f);
 
         button(area, rowW - 100f, 2f, 92f, 22f, "清空日志", "clearlog", "清空控制台输出缓冲");
 
@@ -497,8 +519,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
         String tail = tailLines(out, FrontendSettings.logLines);
         TooltipMakerAPI log = area.createUIElement(rowW - 16f, areaH - 36f, true);
-        log.addPara(tail.isEmpty() ? "（暂无输出）" : tail, 4f, Misc.getTextColor());
         area.addUIElement(log).inTL(8f, 32f);
+        log.addPara(tail.isEmpty() ? "（暂无输出）" : tail, 4f, Misc.getTextColor());
         try {
             ScrollPanelAPI sc = log.getExternalScroller();
             if (sc != null) {
@@ -518,11 +540,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         CustomPanelAPI box = newPanel(rowW, areaH);
         TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 26f, false);
+        box.addUIElement(tm).inTL(8f, 4f);
         tm.setParaFontVictor14();
         tm.addPara("选择" + IdSource.displayNameOf(pickerSource) + "（名称优先，括号内为 ID）", 6f, Misc.getBrightPlayerColor());
-        box.addUIElement(tm).inTL(8f, 4f);
 
-        textField(box, 8f, 28f, rowW - 300f, 24f, pickerQuery, "picker");
+        textField(box, 8f, 28f, Math.max(120f, rowW - 300f), 24f, pickerQuery, "picker");
 
         List<String> tabs = IdSource.tabsFor(pickerSource);
         float tx = rowW - 288f;
@@ -549,7 +571,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         int to = Math.min(filtered.size(), from + ps);
 
         float listY = 58f;
-        float listH = areaH - listY - 34f;
+        float listH = Math.max(40f, areaH - listY - 34f);
         CustomPanelAPI listPanel = newPanel(rowW - 16f, listH);
         TooltipMakerAPI list = listPanel.createUIElement(rowW - 16f, listH, true);
         listPanel.addUIElement(list).inTL(0f, 0f);
@@ -563,23 +585,20 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     "pick|" + pickerSource + "|" + o.id, o.primary() + "\n" + o.secondary());
 
             TooltipMakerAPI idt = line.createUIElement(innerW * 0.38f, lineH, false);
-            idt.addPara(o.secondary(), 6f, Misc.getGrayColor());
             line.addUIElement(idt).inTL(innerW * 0.62f, 4f);
+            idt.addPara(o.secondary(), 6f, Misc.getGrayColor());
 
-            UIComponentAPI added = list.addCustom(line, 0f);
-            if (added != null) {
-                added.getPosition().inTL(0f, (i - from) * lineH);
-            } else {
-                line.getPosition().inTL(0f, (i - from) * lineH);
-            }
+            list.addCustom(line, 2f);
         }
+
         box.addComponent(listPanel);
         listPanel.getPosition().inTL(8f, listY);
 
         TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - 200f), 24f, false);
+        box.addUIElement(foot).inTL(8f, areaH - 24f);
         foot.addPara("共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages
                 + " 页（可直接输入名称或 ID，也可滚动 / 搜索）", 4f, Misc.getGrayColor());
-        box.addUIElement(foot).inTL(8f, areaH - 24f);
+
         if (pages > 1) {
             button(box, rowW - 170f, areaH - 26f, 76f, 22f, "上一页", "pickerpage|prev", null);
             button(box, rowW - 90f, areaH - 26f, 76f, 22f, "下一页", "pickerpage|next", null);
@@ -591,7 +610,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     // ================= 控件工厂 =================
 
     private CustomPanelAPI newPanel(float w, float h) {
-        return bgPanel.createCustomPanel(Math.max(1f, w), Math.max(1f, h), this);
+        return bgPanel.createCustomPanel(Math.max(1f, w), Math.max(1f, h), new ChildPlugin());
     }
 
     private void place(CustomPanelAPI p, float x, float y) {
@@ -599,12 +618,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         p.getPosition().inTL(x, y);
     }
 
-    /** 在 host 内指定位置放一个按钮；tooltip 与按钮同属一个 TooltipMakerAPI，因此 tooltip 能正常显示。 */
+    /**
+     * 在 host 内的指定位置放一个按钮。
+     * 顺序很关键：先 createUIElement → addUIElement 挂到面板 → 再 addButton，
+     * 这样按钮的监听器才能解析到宿主面板（否则点击不会有任何反应）。
+     */
     private ButtonAPI button(CustomPanelAPI host, float x, float y, float w, float h,
                              String text, Object id, String tooltip) {
         float cw = Math.max(1f, w);
         float ch = Math.max(1f, h);
         TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
+        host.addUIElement(tm).inTL(x, y);
         tm.setButtonFontVictor10();
         ButtonAPI b = tm.addButton(text, id, Misc.getButtonTextColor(), Misc.getDarkPlayerColor(),
                 Alignment.MID, CutStyle.ALL, cw, ch, 0f);
@@ -627,7 +651,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 }
             }, TooltipMakerAPI.TooltipLocation.BELOW);
         }
-        host.addUIElement(tm).inTL(x, y);
+        interactive.add(b);
         return b;
     }
 
@@ -636,11 +660,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float cw = Math.max(1f, w);
         float ch = Math.max(1f, h);
         TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
+        host.addUIElement(tm).inTL(x, y);
         TextFieldAPI f = tm.addTextField(cw, ch);
         if (initial != null && !initial.isEmpty()) {
             f.setText(initial);
         }
-        host.addUIElement(tm).inTL(x, y);
+        interactive.add(f);
         fields.put(key, f);
         lastFieldText.put(key, initial == null ? "" : initial);
         return f;
@@ -650,10 +675,20 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     @Override
     public void processInput(List<InputEventAPI> events) {
-        if (events == null) {
+        if (events == null || parent == null) {
             return;
         }
         try {
+            boolean fieldFocused = false;
+            for (TextFieldAPI f : fields.values()) {
+                try {
+                    if (f != null && f.hasFocus()) {
+                        fieldFocused = true;
+                        break;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
             for (InputEventAPI e : events) {
                 if (e == null || e.isConsumed()) {
                     continue;
@@ -663,9 +698,34 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     onEscape();
                     return;
                 }
+                // 输入框获得焦点时，键盘事件交给它
+                if (fieldFocused && e.isKeyboardEvent()) {
+                    continue;
+                }
+                if (e.isKeyboardEvent()) {
+                    e.consume();
+                    continue;
+                }
+                // 鼠标事件：落点不在任何按钮/输入框上就吞掉，避免点穿到战役/战斗 UI
+                if (e.isMouseEvent() && !insideAnyElement(e)) {
+                    e.consume();
+                }
             }
         } catch (Throwable ignored) {
         }
+    }
+
+    private boolean insideAnyElement(InputEventAPI e) {
+        for (UIComponentAPI c : interactive) {
+            try {
+                PositionAPI p = c.getPosition();
+                if (p != null && p.containsEvent(e)) {
+                    return true;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return false;
     }
 
     private void onEscape() {
@@ -1059,8 +1119,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         Map<String, String> vals = new LinkedHashMap<String, String>();
         for (ParamSpec p : e.params) {
             String v = valueOf(e, p);
-            if (ParamSpec.TYPE_ID.equals(p.type) && v != null && !v.trim().isEmpty()) {
-                String src = p.source == null || p.source.isEmpty() ? IdSource.COMMODITY_SPECIAL : p.source;
+            boolean hasSource = p.source != null && !p.source.isEmpty();
+            if (ParamSpec.TYPE_ID.equals(p.type) && hasSource && v != null && !v.trim().isEmpty()) {
+                String src = p.source;
                 List<IdOption> opts = idOptions(src);
                 String resolved = IdSource.resolve(opts, v);
                 if (!resolved.equals(v.trim())) {
@@ -1126,6 +1187,31 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             return;
         }
         commitFields();
+
+        // 必填参数缺失时不执行，直接展开参数区让玩家填写
+        List<String> missing = new ArrayList<String>();
+        for (ParamSpec p : e.params) {
+            if (!p.required) {
+                continue;
+            }
+            String v = valueOf(e, p);
+            if (v == null || v.trim().isEmpty()) {
+                missing.add(p.labelOrKey());
+            }
+        }
+        if (!missing.isEmpty()) {
+            StringBuilder sb = new StringBuilder("请先设置：");
+            for (int i = 0; i < missing.size(); i++) {
+                if (i > 0) {
+                    sb.append("、");
+                }
+                sb.append(missing.get(i));
+            }
+            statusLine = sb.toString();
+            openEditor(command);
+            return;
+        }
+
         List<String> lines = buildLines(e);
         if (lines.isEmpty()) {
             return;
