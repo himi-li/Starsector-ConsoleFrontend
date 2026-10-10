@@ -103,6 +103,15 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private String pickerQuery = "";
     private int pickerPage = 0;
 
+    /**
+     * 命令自身自动补全给出的候选（{@link SuggestionSource}）。
+     *
+     * <p>非空时选择器只列这些候选 —— 这正是玩家反馈的诉求：gcsAddKemomimi 的第一个
+     * 参数应该列 gcs_janus / gcs_anato 这类真实取值，而不是游戏里的全部商品。
+     * 为 null 表示该命令没有实现建议接口，此时回落到按参数来源铺全量列表。
+     */
+    private List<IdOption> pickerSuggestions;
+
     private final Map<String, List<IdOption>> idCache = new HashMap<String, List<IdOption>>();
 
     private final Map<String, TextFieldAPI> fields = new LinkedHashMap<String, TextFieldAPI>();
@@ -947,15 +956,21 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         TooltipMakerAPI tm = box.createUIElement(rowW - 24f, 32f, false);
         box.addUIElement(tm).inTL(12f, 8f);
         tm.setParaFont(FONT_PARA);
-        tm.addPara(escapePercent("选择" + IdSource.displayNameOf(pickerSource)
-                + "（名称优先，括号内为 ID）"), 8f, Misc.getBrightPlayerColor());
+        // 有命令自带建议时，选择器的语义是「这个参数允许的取值」，
+        // 不再是「游戏里的所有商品/物品」，标题要跟着变。
+        String pickerTitle = pickerSuggestions != null
+                ? "选择参数值（候选来自该命令的自动补全）"
+                : "选择" + IdSource.displayNameOf(pickerSource) + "（名称优先，括号内为 ID）";
+        tm.addPara(escapePercent(pickerTitle), 8f, Misc.getBrightPlayerColor());
 
         // 第二行：搜索框（左侧）+ 来源标签（右侧）+ 取消
         final float row2Y = 48f;
         final float tabW = 92f;
         final float tabGap = 6f;
         final float cancelW = 72f;
-        List<String> tabs = IdSource.tabsFor(pickerSource);
+        // 建议模式下没有「来源」可切（候选本来就不是按 spec 枚举来的），不显示标签页。
+        List<String> tabs = pickerSuggestions != null
+                ? new ArrayList<String>() : IdSource.tabsFor(pickerSource);
         float rightBlock = tabs.size() * (tabW + tabGap) + cancelW + 12f;
         float pickFieldW = Math.max(120f, rowW - 24f - rightBlock);
         textField(box, 12f, row2Y, pickFieldW, 24f, pickerQuery, "picker");
@@ -971,7 +986,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
         button(box, rowW - cancelW - 12f, row2Y, cancelW, 24f, "取消", "pickcancel", null);
 
-        List<IdOption> all = idOptions(pickerSource);
+        List<IdOption> all = pickerSuggestions != null ? pickerSuggestions : idOptions(pickerSource);
         List<IdOption> filtered = IdSource.filter(all, pickerQuery);
 
         float listY = 82f;
@@ -1006,19 +1021,24 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             CustomPanelAPI line = newPanel(innerW, lineH);
             // 名称按钮占 62%，ID 注释占 36%（名称优先，ID 作注释）。
             // 两者同高同 y，注释垂直居中 —— 否则按钮文字居中而注释顶端对齐，视觉错位（实测）。
-            float nameW = innerW * 0.62f;
             float rowH = lineH - 2f;
+            // 建议候选本身就是 id（没有游戏内显示名），再补一列 (id) 只是重复。
+            boolean showId = pickerSuggestions == null;
+            float nameW = showId ? innerW * 0.62f : innerW;
+            String pickTip = showId ? o.primary() + "\n" + o.secondary() : o.primary();
             button(line, 0f, 0f, nameW, rowH, shorten(o.primary(), 52),
                     "pick|" + pickerSource + "|" + o.id,
-                    escapePercent(o.primary() + "\n" + o.secondary()));
+                    escapePercent(pickTip));
 
-            TooltipMakerAPI idt = line.createUIElement(innerW * 0.36f, rowH, false);
-            line.addUIElement(idt).inTL(nameW + 4f, 0f);
-            idt.setParaFont(FONT_PARA);
-            LabelAPI idLab = idt.addPara(escapePercent(o.secondary()), 8f, Misc.getGrayColor());
-            try {
-                idLab.setAlignment(Alignment.LMID);
-            } catch (Throwable ignored) {
+            if (showId) {
+                TooltipMakerAPI idt = line.createUIElement(innerW * 0.36f, rowH, false);
+                line.addUIElement(idt).inTL(nameW + 4f, 0f);
+                idt.setParaFont(FONT_PARA);
+                LabelAPI idLab = idt.addPara(escapePercent(o.secondary()), 8f, Misc.getGrayColor());
+                try {
+                    idLab.setAlignment(Alignment.LMID);
+                } catch (Throwable ignored) {
+                }
             }
 
             // pad 0：行高严格等于 lineH，perPage 的整除计算才成立（多一行就会露半截）。
@@ -1036,7 +1056,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - (pgW * 2f + pgGap) - 60f), 28f, false);
         box.addUIElement(foot).inTL(12f, areaH - 36f);
         String footText = "共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages + " 页（每页 " + perPage + " 项）";
-        footText += " · 可直接输入名称或 ID 搜索";
+        footText += pickerSuggestions != null
+                ? " · 候选由该命令自身的自动补全接口给出"
+                : " · 可直接输入名称或 ID 搜索";
         foot.addPara(escapePercent(footText), 5f, Misc.getGrayColor());
 
         place(box, x, y);
@@ -1851,6 +1873,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 needsRebuild = true;
             } else if ("pickcancel".equals(id)) {
                 pickerOpen = false;
+                pickerSuggestions = null;
                 needsRebuild = true;
             } else if (id.startsWith("pickerpage|")) {
                 pickerPage += "next".equals(id.substring(11)) ? 1 : -1;
@@ -2057,11 +2080,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         if (e == null) {
             return;
         }
-        for (ParamSpec p : e.params) {
+        for (int i = 0; i < e.params.size(); i++) {
+            ParamSpec p = e.params.get(i);
             if (p.key.equals(paramKey)) {
                 pickerCommand = command;
                 pickerParamKey = paramKey;
-                pickerSource = p.source == null || p.source.isEmpty() ? IdSource.COMMODITY_SPECIAL : p.source;
+                boolean derived = p.source == null || p.source.isEmpty();
+                pickerSource = derived ? IdSource.COMMODITY_SPECIAL : p.source;
+                // 只有「参数没有精选来源」时才用命令自带的建议：
+                // 精选过 source 的命令，我们已经有带中文名与来源标签的全量列表，
+                // 比只给一串 ID（建议接口只返回 String）更好用。
+                pickerSuggestions = derived ? suggestionsFor(e, i) : null;
                 pickerOpen = true;
                 pickerPage = 0;
                 pickerQuery = "";
@@ -2069,6 +2098,34 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 return;
             }
         }
+    }
+
+    /**
+     * 取第 {@code index} 个参数上「命令自身给出的建议」。
+     *
+     * <p>Console Commands 的约定：{@code previous} 是已经输入的前序参数值（小写）。
+     * 这里从面板草稿 / 已记住的参数里按顺序取前序值，供 parameter&gt;0 的建议使用
+     * （范例是 AddSpecialSuggestionsListener：第二个参数的候选取决于第一个参数）。
+     *
+     * @return 候选列表；命令没实现建议接口时返回 null（调用方回落到全量列表）
+     */
+    private List<IdOption> suggestionsFor(CatalogEntry e, int index) {
+        if (e == null || e.params == null || index < 0 || index >= e.params.size()) {
+            return null;
+        }
+        List<String> previous = new ArrayList<String>();
+        for (int i = 0; i < index; i++) {
+            String v = valueOf(e, e.params.get(i));
+            previous.add(v == null ? "" : v.trim().toLowerCase());
+        }
+        List<IdOption> got;
+        try {
+            got = SuggestionSource.forCommand(e.command, index, previous, context);
+        } catch (Throwable t) {
+            warn("读取命令自动补全失败: " + e.command + " -> " + t);
+            return null;
+        }
+        return got == null || got.isEmpty() ? null : got;
     }
 
     private void choosePick(String id) {
@@ -2080,6 +2137,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         draft.put(fieldKey(pickerCommand, pickerParamKey), id);
         ParamStore.set(pickerCommand, pickerParamKey, id);
         pickerOpen = false;
+        pickerSuggestions = null;
         statusLine = "已选择: " + id;
         needsRebuild = true;
     }
