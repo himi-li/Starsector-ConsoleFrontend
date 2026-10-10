@@ -113,6 +113,18 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private String statusLine = "";
 
     /**
+     * 聚焦输入框的轮询去抖状态。
+     *
+     * <p>见 {@link #pollFields()}：输入框一旦 grabFocus，原生 TextField 会先把按键
+     * 处理掉，回车等事件到不了 {@code processInput}，所以只能主动读控件文本。
+     * 为避免每敲一个字符就重建整个面板（会销毁并重建 TextFieldAPI，可能打断
+     * 中文 IME 组合），文本要连续 {@link #POLL_STABLE_FRAMES} 帧不变才同步。
+     */
+    private String pendingFocusText;
+    private int pendingFocusFrames;
+    private static final int POLL_STABLE_FRAMES = 6;
+
+    /**
      * 日志区的滚动器。
      *
      * <p>不在 buildLogArea 里直接设偏移，是因为正确偏移要等内容完成布局才有意义；
@@ -506,6 +518,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         logScrollToBottom = false;
         logAreaPos = null;
         focusedField = null;
+        pendingFocusText = null;
+        pendingFocusFrames = 0;
 
         float w = bgPanel.getPosition().getWidth();
         float h = bgPanel.getPosition().getHeight();
@@ -1663,13 +1677,22 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     }
 
     /**
-     * 轮询输入框变化（主要用于未经本插件转发的场景，如外部 mod 直接改文本）。
-     * 正常情况下键盘输入由 {@link #forwardKey} 即时处理。
+     * 轮询输入框变化。
+     *
+     * <p><b>为什么必须轮询</b>：输入框一旦 {@code grabFocus}，原生 TextField 会先把
+     * 按键处理掉——回车等事件到不了 {@code processInput}（实测：框里已经输入
+     * 「命令历史」并按回车，列表却完全没过滤）。所以不能只靠键盘事件，
+     * 这里改为主动读控件文本，无论回车是否被吞掉搜索都会生效。
+     *
+     * <p>聚焦中的输入框做去抖（连续 {@link #POLL_STABLE_FRAMES} 帧不变才同步），
+     * 其余输入框一旦变化立即同步。
      */
     private void pollFields() {
         if (focusedField != null) {
+            pollFocusedField();
             return;
         }
+        pendingFocusText = null;
         for (Map.Entry<String, TextFieldAPI> en : fields.entrySet()) {
             String key = en.getKey();
             TextFieldAPI f = en.getValue();
@@ -1689,6 +1712,48 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             lastFieldText.put(key, now);
             applyFieldValue(key, now);
         }
+    }
+
+    /**
+     * 轮询【正在编辑】的输入框。
+     *
+     * <p>文本连续若干帧不变才同步：单帧内 IME 还在组合，过早同步会拿到半成品；
+     * 且同步会置 {@code needsRebuild} 触发整面板重建（旧 TextFieldAPI 被销毁），
+     * 每敲一字重建一次会打断中文输入。参数类输入框（含 {@code '|'}）只需
+     * 去抖后同步预览，不重建。
+     */
+    private void pollFocusedField() {
+        TextFieldAPI f = fields.get(focusedField);
+        if (f == null) {
+            pendingFocusText = null;
+            return;
+        }
+        String now;
+        try {
+            now = f.getText();
+        } catch (Throwable t) {
+            return;
+        }
+        String before = lastFieldText.get(focusedField);
+        if (now == null ? before == null : now.equals(before)) {
+            pendingFocusText = null;
+            pendingFocusFrames = 0;
+            return;
+        }
+        if (now.equals(pendingFocusText)) {
+            pendingFocusFrames++;
+        } else {
+            pendingFocusText = now;
+            pendingFocusFrames = 1;
+            return;
+        }
+        if (pendingFocusFrames < POLL_STABLE_FRAMES) {
+            return;
+        }
+        pendingFocusFrames = 0;
+        pendingFocusText = null;
+        lastFieldText.put(focusedField, now);
+        applyFieldValue(focusedField, now);
     }
 
     private void updatePreview(String command) {
