@@ -19,6 +19,9 @@ every console command gets a clickable button, so you never have to remember com
   **in-game display name first, with the raw ID as a grey annotation**.
 - **All commands collected automatically**: any command registered by any installed mod appears on the panel.
 - **UI language**: Chinese; a "use English labels" toggle is available in the settings.
+- **Optional built-in font**: the font bundle ships the pixel font **Zpix** (MIT) in 7 sizes (12–24 px);
+  it is **off by default** and can be enabled — and resized — in the settings. The regular package
+  installs nothing extra and uses the game's own `victor16.fnt`.
 
 **Requirements**: Console Commands 4.0.x (`lw_console`) and LazyLib. LunaLib is optional.
 **Install**: drop the `ConsoleFrontend` folder into `Starsector/mods/`, then enable it in the launcher.
@@ -32,9 +35,15 @@ every console command gets a clickable button, so you never have to remember com
   （保存在 `saves/common/config/console_frontend_params.json.data`）。
 - **ID 选择器**：需要 ID 的参数（如「加物品」）提供「下拉选择 + 直接输入 + 搜索」三合一，
   列表**以游戏内名称为主，ID 以灰色小字作为注释保留**。
-- **中文界面**：界面字体使用游戏内置、且已含 CJK 字形的 `graphics/fonts/victor16.fnt`
-  （本面板不打包字体文件，直接读取游戏自带的字库）。
+- **中文界面**：默认使用游戏内置、且已含 CJK 字形的 `graphics/fonts/victor16.fnt`
+  （直接从游戏自带的字库读取）。
   若未安装汉化包，可在设置中开启 `使用英文标签`。
+- **内置字体（可选，默认关闭）**：带字体的发行包额外内置像素字体 **Zpix**（MIT 许可，可自由使用），
+  提供 **12 / 14 / 16 / 18 / 20 / 22 / 24** 七档字号，可在游戏内 Mod 设置里开启并自由调节。
+  开启后正文、标签、文本框与按钮统一改用该字体：除了中文更清晰，它还**带真正的小写字母**——
+  游戏自带的 victor 系列是小体大写（small-caps）字库，小写字形就是大写形状，
+  因此像 `psm_addShipXP` 这样的命令名会显示成 `PSM_ADDSHIPXP`，开启内置字体后按原样显示。
+  关闭该选项时显示与不带字体的版本完全一致。
 
 ## 安装
 
@@ -58,6 +67,11 @@ every console command gets a clickable button, so you never have to remember com
 # 编译 + 自动部署到游戏 mods 目录
 .\build.ps1 -Deploy
 ```
+
+> 打包/部署「带内置字体」的版本时，字体资产需放在 `_release\fonts\out2\`
+> （`cf_zpix_<字号>.fnt` 与同名 `_0.png`，共 14 个文件约 5.8MB）。
+> 该目录刻意不进版本库，因此从仓库副本直接构建只会得到「不带字体」的版本：
+> `build.ps1 -Deploy` 检测到该目录不存在时会跳过字体，不会报错。
 
 可用参数：
 
