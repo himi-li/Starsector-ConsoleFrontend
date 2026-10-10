@@ -34,6 +34,11 @@ public class ConsoleFrontendModPlugin extends BaseModPlugin {
         } catch (Throwable t) {
             log("加载参数失败（将使用默认值）: " + t);
         }
+        try {
+            FontStore.load();
+        } catch (Throwable t) {
+            log("加载界面字体设置失败（将使用游戏自带字体）: " + t);
+        }
         // 接入 LunaLib 设置（仅当已启用 lunalib 时才触碰它的类）
         try {
             if (Global.getSettings().getModManager().isModEnabled("lunalib")) {
@@ -56,6 +61,8 @@ public class ConsoleFrontendModPlugin extends BaseModPlugin {
             FrontendLabels.reload();
             IdSource.invalidate();
             ParamStore.load();
+            FontStore.load();
+            FontCatalog.invalidate();
         } catch (Throwable ignored) {
         }
     }

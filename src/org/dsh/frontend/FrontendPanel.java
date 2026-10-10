@@ -169,9 +169,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     // ---- 纵向布局常量（自上而下，单位像素）----
     //
     // 【为什么是实例字段】这些数字原本是 static final 的固定值（按 victor16 的行高 18 手工标定）。
-    // 现在字号可由玩家在 12~24 之间切换，行高随之变化，固定值会把控件压字或留出大片空洞，
-    // 因此改为实例字段，统一由 {@link #layoutMetrics()} 在每次 rebuild() 开头按
-    // {@link FrontendSettings#paraLineHeight()} 等比换算。行高 18 时换算结果与原值逐位一致。
+    // 现在玩家可以在字体选择器里换成任意可用字体，行高随之变化（例如 victor10 只有 10），
+    // 固定值会把控件压字或留出大片空洞，因此改为实例字段，统一由 {@link #layoutMetrics()}
+    // 在每次 rebuild() 开头按 {@link #activeLineHeight} 等比换算。
+    // 行高 18 时换算结果与原值逐位一致。
     //
     // 注意：原版 TextFieldAPI 的<b>实际渲染高度大于请求高度</b>——
     // 请求 24px 时实测约占 40px（与字体行高有关）。因此行距不能按请求高度算，
@@ -201,43 +202,150 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private static final float LABEL_INK_CENTER_RATIO = 26f / 18f;
 
     /**
-     * 正文 / 标签 / 文本框字体。
+     * 本次重建实际生效的正文 / 标签 / 文本框字体路径（由 {@link #prepareFont()} 决定）。
      *
      * <p>{@code TooltipMakerAPI} 没有 {@code setParaFontVictor16()}，但 {@code setParaFont(String)}
      * 会把传入值直接写进 paraFont 字段（字节码确认），因此可以传任意字面路径；
      * 文本框的 4 参重载 {@code addTextField(w,h,font,pad)} 同样接受字面路径。
      * victor16.fnt 行高 18（victor14 只有 13），中文 6738 字形齐全。
      *
-     * <p><b>字体与字号</b>：默认维持 victor16 不变（不带字体版）。玩家开启「使用内置字体」后，
-     * 正文走 mod 自带的 Zpix（{@link FrontendSettings#paraFontPath()}），按钮走
-     * {@link #btnFontPath()} —— 按钮字体在 {@link #button} 里经反射直写
+     * <p><b>字体来源</b>：mod <b>不打包任何字体</b>。玩家自行安装的字体（放在游戏本体或任意 mod 的
+     * {@code graphics/fonts} 下）由 {@link FontCatalog} 运行时探测，玩家在面板里的字体选择器挑选，
+     * 选择结果由 {@link FontStore} 记住。未选择 / 选择失效时一律回退到游戏自带 victor16，
+     * 行为与 0.1.1 完全一致。选中别的字体后，按钮字体在 {@link #button} 里经反射直写
      * {@code private.public$if} 字段，因此不再受 7 个 {@code setButtonFont*} 字面量的限制。
-     * 缺字形时的显示安全由随字体一起打包的 Zpix 位图（6754 字形，含全部 ASCII 与常用汉字）保证。
      */
     private String fontPath() {
-        return FrontendSettings.paraFontPath();
+        return activeFontPath;
+    }
+
+    /** 玩家选的字体是否真正生效（不是回退到自带 victor16）。 */
+    private boolean customFontActive() {
+        return !FrontendSettings.FALLBACK_FONT_PATH.equals(activeFontPath);
     }
 
     /**
-     * 按钮文字字体路径。
+     * 确定本次重建使用的字体，并把玩家选中的字体注册进游戏字体表。
      *
-     * <p>三条分支的共同约束是<b>必须有真小写</b>：victor10/14/16 是「小型大写」字库
-     * （小写字形就是大写形状，逐字形位图比对 victor10 26/26 相同、victor14 10/26 相同），
-     * 用它渲染 psm_addShipXP 会变成 PSM_ADDSHIPXP。
+     * <p><b>为什么必须注册</b>：只把 {@code graphics/fonts/xxx.fnt} 这个路径字符串
+     * 写进控件是不够的 —— 游戏按路径查字体表
+     * （{@code com.fs.graphics.A.D} 的 {@code HashMap<String,F>}，反汇编确认它<b>只查表、不按需加载</b>），
+     * 未注册的路径查表得 null，文本对象 {@code setFont(null)} 直接早退、字体永久留空，
+     * 随后测量文本时对 null 调 {@code $dynfontRawNominal()} 抛 NPE，被 {@link #rebuild()} 的
+     * catch 吞掉，表现就是<b>整个面板变空白</b>（实测：starsector.log 里
+     * 「重建面板失败: java.lang.NullPointerException: Cannot invoke
+     * "com.fs.graphics.A.F.$dynfontRawNominal()" because "this.float.new" is null」＋「按钮=0」）。
      *
-     * <ul>
-     *   <li>内置字体开启：一律用 Zpix（真小写 + 中文齐全），行高随字号变化。</li>
-     *   <li>内置字体关闭且文字含中文：victor14（行高 13、中文 6735 字形）——
-     *       游戏自带唯一「既小又含中文」的按钮字体，只能接受它的小型大写外观。</li>
-     *   <li>内置字体关闭且纯英文：orbitron12condensed（{@code setButtonFontDefault()} 的字面量，
-     *       行高 16、6506 字形，26 个小写字母都是独立字形）。</li>
-     * </ul>
+     * <p>{@code SettingsAPI.loadFont(path)} 正是唯一注册入口（字节码 = 路径校验后
+     * {@code A.D.super(path, path)} 写进那张表），上游 Console Commands / MagicLib / LazyLib
+     * 都这样加载 graphics/fonts 下的字体。
+     *
+     * <p><b>探测结果决定可用性</b>：行高取自 {@link FontCatalog} 解析出的
+     * {@code common lineHeight}（布局常量全部按它缩放）；字体已被玩家删掉
+     * （或所在 mod 被关闭）时 {@code FontCatalog.find} 返回 null，直接回退。
+     *
+     * <p><b>失败必须回退</b>：加载失败、路径被拒时整块回退到游戏自带 victor16
+     * （外观等同未选择字体），绝不能让界面空白。回退状态只记一次日志，避免每帧重试刷屏。
      */
-    private String btnFontPath() {
-        if (FrontendSettings.builtinFont) {
-            return fontPath();
+    private void prepareFont() {
+        String want = null;
+        try {
+            want = FontStore.selected();
+        } catch (Throwable ignored) {
         }
-        return "graphics/fonts/orbitron12condensed.fnt";
+        if (want == null || want.isEmpty() || FrontendSettings.FALLBACK_FONT_PATH.equals(want)) {
+            activeFontPath = FrontendSettings.FALLBACK_FONT_PATH;
+            activeLineHeight = FrontendSettings.FALLBACK_LINE_HEIGHT;
+            fontLabel = FontCatalog.FALLBACK_LABEL;
+            return;
+        }
+        FontCatalog.Entry entry = FontCatalog.find(want);
+        if (entry == null) {
+            // 玩家选的字体已经不在磁盘上（删了文件 / 关了带字体的 mod）。
+            activeFontPath = FrontendSettings.FALLBACK_FONT_PATH;
+            activeLineHeight = FrontendSettings.FALLBACK_LINE_HEIGHT;
+            fontLabel = FontCatalog.FALLBACK_LABEL;
+            return;
+        }
+        fontLabel = entry.name;
+        if (ensureFontRegistered(want)) {
+            activeFontPath = want;
+            activeLineHeight = entry.lineHeight > 0 ? entry.lineHeight : FrontendSettings.FALLBACK_LINE_HEIGHT;
+        } else {
+            activeFontPath = FrontendSettings.FALLBACK_FONT_PATH;
+            activeLineHeight = FrontendSettings.FALLBACK_LINE_HEIGHT;
+        }
+    }
+
+    /** 把字体路径注册进游戏字体表；已注册过直接返回 true，已确认失败的直接返回 false。 */
+    private boolean ensureFontRegistered(String path) {
+        if (registeredFonts.contains(path)) {
+            return true;
+        }
+        if (brokenFonts.contains(path)) {
+            return false;
+        }
+        try {
+            SettingsAPI settings = Global.getSettings();
+            settings.loadFont(path);
+        } catch (Throwable t) {
+            return markBroken(path, "loadFont 抛出异常", t);
+        }
+        // loadFont 不抛异常还不等于注册成功（它内部把 registry 建好就返回），
+        // 再回查一次游戏字体表确认能按同一路径取到字体对象；取不到宁可回退也不要冒险空白。
+        Boolean present = fontRegisteredInGame(path);
+        if (Boolean.FALSE.equals(present)) {
+            return markBroken(path, "loadFont 返回后字体表里仍查不到", null);
+        }
+        registeredFonts.add(path);
+        return true;
+    }
+
+    /** 记下不可用的字体路径并（只）提示一次。 */
+    private boolean markBroken(String path, String reason, Throwable t) {
+        brokenFonts.add(path);
+        if (!fontWarned) {
+            fontWarned = true;
+            warn("所选字体不可用，本次回退到自带字体: " + path + "（" + reason
+                    + (t == null ? "" : " -> " + t) + "）");
+        }
+        return false;
+    }
+
+    /**
+     * 回查游戏字体表，判断 {@code path} 是否真的能取到字体对象。
+     *
+     * <p>字体表在混淆类 {@code com.fs.graphics.A.D} 里，是 {@code HashMap<String,F>}；
+     * 它的静态 getter 就是「一个 String 参数、返回字体对象、不抛异常」的那个方法
+     * （同名的私有 {@code void super(String)} / {@code String super(boolean)} 会被下面
+     * 的参数与返回类型条件排除），所以这里按签名挑方法而不是按混淆后的名字。
+     *
+     * @return {@code TRUE} 已注册 / {@code FALSE} 确定没有 / {@code null} 无法判定（反射失败）
+     */
+    private Boolean fontRegisteredInGame(String path) {
+        try {
+            Class<?> registry = Class.forName("com.fs.graphics.A.D");
+            java.lang.reflect.Method getter = null;
+            for (java.lang.reflect.Method cand : registry.getDeclaredMethods()) {
+                if (!java.lang.reflect.Modifier.isStatic(cand.getModifiers())) {
+                    continue;
+                }
+                Class<?>[] ps = cand.getParameterTypes();
+                Class<?> rt = cand.getReturnType();
+                if (ps.length == 1 && ps[0] == String.class && rt != void.class
+                        && rt != int.class && rt != boolean.class) {
+                    getter = cand;
+                    break;
+                }
+            }
+            if (getter == null) {
+                return null;
+            }
+            getter.setAccessible(true);
+            return getter.invoke(null, path) != null;
+        } catch (Throwable t) {
+            return null;
+        }
     }
 
     /**
@@ -251,7 +359,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      * 因此行间距额外加 {@code (s-1) * 6}，字号 24（s≈1.33）时约多 2px。
      */
     private void layoutMetrics() {
-        float lh = FrontendSettings.paraLineHeight();
+        float lh = activeLineHeight;
         float s = lh / 18f;
         // 行间距的额外补偿：字号越大，行与行之间需要的空隙越多。
         float pad = (s - 1f) * 6f;
@@ -275,14 +383,45 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     /** 控件高度按比例缩放（文本框与按钮共用）。 */
     private float m(float v) {
-        return snap(v, FrontendSettings.paraLineHeight() / 18f);
+        return snap(v, activeLineHeight / 18f);
     }
+
+    /**
+     * 本次重建实际生效的字体路径与行高。
+     *
+     * <p>初值就是游戏自带 fallback，因此在 {@link #prepareFont()} 首次执行前
+     * 任何取值都是安全值（不会有未注册的字体路径流到控件上）。
+     */
+    private String activeFontPath = FrontendSettings.FALLBACK_FONT_PATH;
+    private float activeLineHeight = FrontendSettings.FALLBACK_LINE_HEIGHT;
+
+    /**
+     * 已成功注册进游戏字体表（{@code com.fs.graphics.A.D}）的路径。
+     *
+     * <p>刻意是 <b>static</b>：字体表本身是整个游戏进程共用的，
+     * 面板关闭再打开时若重新 loadFont 会再解析一次 .fnt 并重建一次 GL 纹理（白白浪费显存与时间）。
+     */
+    private static final java.util.Set<String> registeredFonts = new java.util.HashSet<String>();
+
+    /** 已确认注册失败的字体路径（静态缓存，避免每个新面板都重试一次并刷日志）。 */
+    private static final java.util.Set<String> brokenFonts = new java.util.HashSet<String>();
+
+    /** 所选字体加载失败只提示一次。 */
+    private static boolean fontWarned;
+
+    /** 字体选择器的显示名（选择器标题与按钮文字用）。 */
+    private String fontLabel = FontCatalog.FALLBACK_LABEL;
+    /** 字体选择区是否打开（复用 buildPicker 的界面）。 */
+    private boolean pickerFont;
 
     private float lastW;
     private float lastH;
     private boolean loggedRender;
     private boolean closed;
     private boolean mountedInDialog;
+    /** 字体选择器复用 pickerSource 通道时的哨兵值（真实来源里不会出现这个字符串）。 */
+    private static final String FONT_PICK_SOURCE = "__font__";
+
     /** 当前正在编辑的输入框 key（不依赖原生焦点机制，见 {@link #forwardKey}）。 */
     private String focusedField;
 
@@ -611,7 +750,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         float w = bgPanel.getPosition().getWidth();
         float h = bgPanel.getPosition().getHeight();
-        // 先把纵向布局常量按当前字体行高换算好，后面所有区域都用换算后的值。
+        // 先确定字体（必要时把内置字体注册进游戏字体表，失败则回退），再按它的行高
+        // 换算纵向布局常量 —— 两者顺序不能颠倒，否则行高与实际字体不一致。
+        prepareFont();
         layoutMetrics();
         // 左右各留 8px 安全边距：host 面板若比请求尺寸略窄，
         // 用 rowW = w - margin*2 计算的右对齐元素会被裁掉（实测右列缺一半）。
@@ -683,11 +824,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float rowW = w - margin * 2f;
         CustomPanelAPI row = newPanel(rowW, H_HEADER);
 
-        TooltipMakerAPI tm = row.createUIElement(rowW - 140f, H_HEADER, false);
+        // 标题文本宽度要给右侧的「字体」「关闭」两个按钮让位；窗口很窄时也别算出负宽度
+        //（createUIElement 收到负数会直接抛异常，被 rebuild 的 catch 吞掉 → 整块空白）。
+        TooltipMakerAPI tm = row.createUIElement(Math.max(60f, rowW - 350f), H_HEADER, false);
         row.addUIElement(tm).inTL(0f, 4f);
         tm.setParaFont(fontPath());
         tm.addPara("控制台前端 · 命令按钮    热键 " + FrontendSettings.hotkeyText(), 8f, Misc.getBrightPlayerColor());
 
+        // 字体入口：显示当前字体名，点开是可用字体的选择器（mod 不打包字体，只检测玩家已装的）。
+        String fontBtn = "字体: " + shorten(fontLabel, 22);
+        button(row, Math.max(0f, rowW - 348f), 2f, 210f, m(24f), fontBtn, "font|open",
+                "选择界面字体（探测游戏本体与各 mod 的 graphics/fonts 目录）");
         button(row, rowW - 130f, 2f, 124f, m(24f), "关闭 (ESC)", "close", "关闭面板并恢复游戏状态");
         place(row, margin, Y_HEADER);
     }
@@ -1043,11 +1190,13 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         tm.setParaFont(fontPath());
         // 有命令自带建议时，选择器的语义是「这个参数允许的取值」，
         // 不再是「游戏里的所有商品/物品」，标题要跟着变。
-        String pickerTitle = pickerEnum
+        String pickerTitle = pickerFont
+                ? "选择界面字体（含中文的已排在前面；保存后立即生效）"
+                : (pickerEnum
                 ? "选择参数值（该参数的预设选项）"
                 : (pickerSuggestions != null
                 ? "选择参数值（候选来自该命令的自动补全）"
-                : "选择" + IdSource.displayNameOf(pickerSource) + "（名称优先，括号内为 ID）");
+                : "选择" + IdSource.displayNameOf(pickerSource) + "（名称优先，括号内为 ID）"));
         tm.addPara(escapePercent(pickerTitle), 8f, Misc.getBrightPlayerColor());
 
         // 第二行：搜索框（左侧）+ 来源标签（右侧）+ 取消
@@ -1056,7 +1205,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         final float tabGap = 6f;
         final float cancelW = m(72f);
         // 建议模式下没有「来源」可切（候选本来就不是按 spec 枚举来的），不显示标签页。
-        List<String> tabs = pickerSuggestions != null
+        List<String> tabs = (pickerFont || pickerSuggestions != null)
                 ? new ArrayList<String>() : IdSource.tabsFor(pickerSource);
         float rightBlock = tabs.size() * (tabW + tabGap) + cancelW + 12f;
         float pickFieldW = Math.max(120f, rowW - m(24f) - rightBlock);
@@ -1073,7 +1222,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         }
         button(box, rowW - cancelW - 12f, row2Y, cancelW, m(24f), "取消", "pickcancel", null);
 
-        List<IdOption> all = pickerSuggestions != null ? pickerSuggestions : idOptions(pickerSource);
+        List<IdOption> all = pickerFont
+                ? fontOptions()
+                : (pickerSuggestions != null ? pickerSuggestions : idOptions(pickerSource));
         List<IdOption> filtered = IdSource.filter(all, pickerQuery);
 
         float listY = m(82f);
@@ -1110,18 +1261,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             // 两者同高同 y，注释垂直居中 —— 否则按钮文字居中而注释顶端对齐，视觉错位（实测）。
             float rowH = lineH - 2f;
             // 建议候选本身就是 id（没有游戏内显示名），再补一列 (id) 只是重复。
-            boolean showId = pickerSuggestions == null;
-            float nameW = showId ? innerW * 0.62f : innerW;
-            String pickTip = showId ? o.primary() + "\n" + o.secondary() : o.primary();
+            boolean showId = !pickerFont && pickerSuggestions == null;
+            // 字体模式右侧那一列放「来源 · 行高 · 字形数」，同样需要给名称列让位。
+            boolean hasRight = pickerFont || showId;
+            float nameW = hasRight ? innerW * 0.62f : innerW;
+            // 字体模式的提示里带上完整路径（面板不显示它，太长），方便玩家确认到底是哪个文件。
+            String pickTip = pickerFont
+                    ? o.primary() + "\n" + o.id + "\n" + o.note
+                    : (showId ? o.primary() + "\n" + o.secondary() : o.primary());
             button(line, 0f, 0f, nameW, rowH, shorten(o.primary(), 52),
-                    "pick|" + pickerSource + "|" + o.id,
+                    "pick|" + (pickerFont ? FONT_PICK_SOURCE : pickerSource) + "|" + o.id,
                     escapePercent(pickTip));
 
-            if (showId) {
+            if (hasRight) {
                 TooltipMakerAPI idt = line.createUIElement(innerW * 0.36f, rowH, false);
                 line.addUIElement(idt).inTL(nameW + 4f, 0f);
                 idt.setParaFont(fontPath());
-                LabelAPI idLab = idt.addPara(escapePercent(o.secondary()), 8f, Misc.getGrayColor());
+                // 字体模式下 o.id 是完整的 classpath 路径（太长），右侧只放来源与字形信息。
+                String noteText = pickerFont ? o.note : o.secondary();
+                LabelAPI idLab = idt.addPara(escapePercent(noteText), 8f, Misc.getGrayColor());
                 try {
                     idLab.setAlignment(Alignment.LMID);
                 } catch (Throwable ignored) {
@@ -1143,11 +1301,13 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - (pgW * 2f + pgGap) - 60f), m(28f), false);
         box.addUIElement(foot).inTL(12f, areaH - m(36f));
         String footText = "共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages + " 页（每页 " + perPage + " 项）";
-        footText += pickerEnum
+        footText += pickerFont
+                ? " · 选中即保存，无需重启"
+                : (pickerEnum
                 ? " · 也可直接在输入框里填写其他取值"
                 : (pickerSuggestions != null
                 ? " · 候选由该命令自身的自动补全接口给出"
-                : " · 可直接输入名称或 ID 搜索");
+                : " · 可直接输入名称或 ID 搜索"));
         foot.addPara(escapePercent(footText), 5f, Misc.getGrayColor());
 
         place(box, x, y);
@@ -1278,14 +1438,16 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         // 于是 psm_addShipXP 会显示成 PSM_ADDSHIPXP。setButtonFontDefault() =
         // orbitron12condensed.fnt（lineHeight 16、6506 字形，26 个小写字母都是独立字形），
         // 且不在 addButton 对 victor10/victor14 的特判分支里，是唯一可用的真小写按钮字体。
-        // 启用内置字体时，用「内置字体 + 内置字号」的统一字体；否则维持原行为
+        // 玩家选了自定义字体时，正文与按钮统一用它；否则维持原行为
         // （中文走 Victor14、纯英文走 setButtonFontDefault() 的 orbitron12condensed）。
-        if (FrontendSettings.builtinFont) {
+        if (customFontActive()) {
             // 反射直写按钮字体字段：7 个 setButtonFont* 都是把字面量写进同一个私有字段
             // （字段名字面量 private.public$if），所以写它等价于多出一个 setButtonFont(String)。
-            // 先按内置字体设置，写失败也不影响 addButton 的默认分支。
+            // 先设置默认字体打底，写失败也不影响 addButton 的默认分支。
+            // 注意判断的是「玩家选的字体是否真的生效」而非设置值本身：注册失败已回退时，
+            // 必须走下面的自带字体分支（中文 victor14 / 英文 orbitron12condensed）。
             tm.setButtonFontDefault();
-            Reflect.setFieldValue(tm, "private.public$if", btnFontPath());
+            Reflect.setFieldValue(tm, "private.public$if", activeFontPath);
         } else if (CatalogEntry.hasCjk(text)) {
             tm.setButtonFontVictor14();
         } else {
@@ -1328,7 +1490,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      * 即 {@code 8 + 26.1}。所以本常数 = 26f（victor16）。
      */
     private float labelInkCenter() {
-        return LABEL_INK_CENTER_RATIO * FrontendSettings.paraLineHeight();
+        return LABEL_INK_CENTER_RATIO * activeLineHeight;
     }
 
     /**
@@ -1722,6 +1884,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private void onEscape() {
         if (pickerOpen) {
             pickerOpen = false;
+            pickerFont = false;
             needsRebuild = true;
             return;
         }
@@ -1963,8 +2126,15 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             } else if (id.startsWith("pick|")) {
                 int a = id.indexOf('|', 5);
                 if (a > 0) {
-                    choosePick(id.substring(a + 1));
+                    String pickSrc = id.substring(5, a);
+                    if (FONT_PICK_SOURCE.equals(pickSrc)) {
+                        chooseFont(id.substring(a + 1));
+                    } else {
+                        choosePick(id.substring(a + 1));
+                    }
                 }
+            } else if (id.startsWith("font|")) {
+                openFontPicker();
             } else if (id.startsWith("picksrc|")) {
                 pickerSource = id.substring(8);
                 pickerPage = 0;
@@ -1972,6 +2142,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 needsRebuild = true;
             } else if ("pickcancel".equals(id)) {
                 pickerOpen = false;
+                pickerFont = false;
                 pickerSuggestions = null;
                 pickerEnum = false;
                 needsRebuild = true;
@@ -2002,6 +2173,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 commitFields();
                 idCache.clear();
                 IdSource.invalidate();
+                FontCatalog.invalidate();
                 FrontendLabels.reload();
                 catalog.build(context);
                 statusLine = "目录已刷新";
@@ -2174,8 +2346,29 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return v != null && ("true".equalsIgnoreCase(v) || "on".equalsIgnoreCase(v) || "1".equals(v));
     }
 
+    /**
+     * 打开字体选择器（复用 {@link #buildPicker} 的界面与 pickerSource 通道）。
+     *
+     * <p>先 {@link FontCatalog#invalidate()} 再重建，玩家新装/删掉字体后
+     * 点一下就能看到最新的可用列表。
+     */
+    private void openFontPicker() {
+        commitFields();
+        FontCatalog.invalidate();
+        pickerFont = true;
+        pickerOpen = true;
+        pickerEnum = false;
+        pickerSuggestions = null;
+        // 通道里放哨兵而不是真的来源名：选中项的按钮 id 由此判定该走 chooseFont。
+        pickerSource = FONT_PICK_SOURCE;
+        pickerQuery = "";
+        pickerPage = 0;
+        needsRebuild = true;
+    }
+
     private void openPicker(String command, String paramKey) {
         commitFields();
+        pickerFont = false;
         CatalogEntry e = catalog.byCommand(command);
         if (e == null) {
             return;
@@ -2286,6 +2479,54 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         List<IdOption> built = IdSource.build(source);
         idCache.put(source, built);
         return built;
+    }
+
+    /**
+     * 字体选择器的候选项：第一项固定是「游戏自带」，其余是 {@link FontCatalog} 探测到的字体。
+     *
+     * <p>note 列给出「来源 mod + 行高 + 字形数（含中文时标出）」，
+     * 没有中文字形的字体额外标注，避免玩家选到之后正文显示成方框。
+     */
+    private List<IdOption> fontOptions() {
+        List<IdOption> out = new ArrayList<IdOption>();
+        out.add(new IdOption(FrontendSettings.FALLBACK_FONT_PATH, FontCatalog.FALLBACK_LABEL,
+                "victor16 · 行高 18", ""));
+        for (FontCatalog.Entry e : FontCatalog.all()) {
+            if (FrontendSettings.FALLBACK_FONT_PATH.equals(e.path)) {
+                continue;
+            }
+            String note = e.source + " · 行高 " + e.lineHeight + " · " + e.chars + " 字形"
+                    + (e.hasCjk() ? "" : "（无中文）");
+            out.add(new IdOption(e.path, e.name, note, e.source));
+        }
+        return out;
+    }
+
+    /** 玩家在字体选择器里点了某一项：记住选择、必要时先注册，然后整块重建。 */
+    private void chooseFont(String path) {
+        if (path == null || path.isEmpty()) {
+            return;
+        }
+        FontStore.select(path);
+        // 选中的字体必须在使用前注册进游戏字体表（buildPicker 自己就要用它画字），
+        // 注册失败也不拦着玩家选 —— prepareFont() 会在下次重建时安静回退。
+        if (!FrontendSettings.FALLBACK_FONT_PATH.equals(path)) {
+            ensureFontRegistered(path);
+        }
+        pickerFont = false;
+        pickerSuggestions = null;
+        pickerEnum = false;
+        pickerOpen = false;
+        pickerQuery = "";
+        pickerPage = 0;
+        if (FrontendSettings.FALLBACK_FONT_PATH.equals(path)) {
+            fontLabel = FontCatalog.FALLBACK_LABEL;
+        } else {
+            FontCatalog.Entry e = FontCatalog.find(path);
+            fontLabel = e == null ? path : e.name;
+        }
+        statusLine = "界面字体已切换为: " + fontLabel;
+        needsRebuild = true;
     }
 
     /** 解析所有参数（ID 类做名称->ID 映射），生成要执行的命令行。 */

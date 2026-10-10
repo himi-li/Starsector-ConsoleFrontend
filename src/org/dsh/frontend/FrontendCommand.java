@@ -3,7 +3,7 @@ package org.dsh.frontend;
 import org.lazywizard.console.BaseCommand;
 import org.lazywizard.console.Console;
 
-/** 控制台命令：consolefrontend [open|close|reload|resetparams] */
+/** 控制台命令：consolefrontend [open|close|reload|resetparams|resetfont] */
 public class FrontendCommand implements BaseCommand {
 
     @Override
@@ -35,6 +35,11 @@ public class FrontendCommand implements BaseCommand {
         if ("resetparams".equals(a)) {
             ParamStore.resetAll();
             Console.showMessage("控制台前端：所有命令参数已恢复默认。");
+            return CommandResult.SUCCESS;
+        }
+        if ("resetfont".equals(a)) {
+            FontStore.select("");
+            Console.showMessage("控制台前端：界面字体已恢复为游戏自带。");
             return CommandResult.SUCCESS;
         }
         return CommandResult.BAD_SYNTAX;

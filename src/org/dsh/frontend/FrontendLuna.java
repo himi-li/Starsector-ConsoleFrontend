@@ -108,19 +108,10 @@ public final class FrontendLuna {
         if (b != null) {
             FrontendSettings.useEnglishLabels = b.booleanValue();
         }
-        b = safeBool("cf_builtinFont");
-        if (b != null) {
-            FrontendSettings.builtinFont = b.booleanValue();
-        }
-        try {
-            Integer v = LunaSettings.getInt(MOD, "cf_fontSize");
-            if (v != null) {
-                // 吸附逻辑放在 FrontendSettings：FrontendPanel 也要用，
-                // 而本类 import 了 lunalib，未装 LunaLib 时根本不可加载。
-                FrontendSettings.fontSize = FrontendSettings.clampFontSize(v.intValue());
-            }
-        } catch (Throwable ignored) {
-        }
+        // 界面字体不进 LunaSettings：LunaLib 的 Radio/Multichoice 选项来自
+        // LunaSettings.csv 的静态 secondaryValue（编译期写死），而可用字体列表是
+        // 运行时扫出来的，填不进去。字体由面板内的字体选择器承载，
+        // 选择结果存在 FontStore（saves/common/config/console_frontend_font.json.data）。
     }
 
     private static Boolean safeBool(String key) {

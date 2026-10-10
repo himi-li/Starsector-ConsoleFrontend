@@ -237,13 +237,15 @@ if ($Deploy) {
     if (Test-Path (Join-Path $root 'graphics')) {
         Copy-Item (Join-Path $root 'graphics\*') (Join-Path $dest 'graphics') -Recurse -Force
     }
-    # 内置字体（Zpix，MIT）：5.8MB 资产刻意不进版本库，只在本地存在时一并部署。
-    # 因此这里用「存在才复制」，从 git clone 出来的干净副本不会因缺字体而失败。
-    $fontSrc = Join-Path $root '_release\fonts\out2'
-    if (Test-Path $fontSrc) {
-        New-Item -ItemType Directory -Force -Path (Join-Path $dest 'graphics\fonts') | Out-Null
-        Copy-Item (Join-Path $fontSrc 'cf_zpix_*.fnt') (Join-Path $dest 'graphics\fonts') -Force
-        Copy-Item (Join-Path $fontSrc 'cf_zpix_*.png') (Join-Path $dest 'graphics\fonts') -Force
+    # 本 mod 不再打包任何字体（字体改由玩家自行安装 + 面板内选择）。
+    # 清掉早期「内置 Zpix 字体」版本遗留在部署目录里的 cf_zpix_*（.fnt 及其贴图），
+    # 否则它们会作为幽灵字体残留在字体选择器里。
+    $glyphDir = Join-Path $dest 'graphics\fonts'
+    if (Test-Path $glyphDir) {
+        Remove-Item (Join-Path $glyphDir 'cf_zpix_*') -Force -ErrorAction SilentlyContinue
+        if (-not (Get-ChildItem $glyphDir -Force)) {
+            Remove-Item $glyphDir -Force -ErrorAction SilentlyContinue
+        }
     }
 
     # 部署后自检（含贴图）

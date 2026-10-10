@@ -19,9 +19,9 @@ every console command gets a clickable button, so you never have to remember com
   **in-game display name first, with the raw ID as a grey annotation**.
 - **All commands collected automatically**: any command registered by any installed mod appears on the panel.
 - **UI language**: Chinese; a "use English labels" toggle is available in the settings.
-- **Optional built-in font**: the font bundle ships the pixel font **Zpix** (MIT) in 7 sizes (12–24 px);
-  it is **off by default** and can be enabled — and resized — in the settings. The regular package
-  installs nothing extra and uses the game's own `victor16.fnt`.
+- **Custom interface font (optional)**: the mod ships **no** font. It scans the fonts you already
+  have installed (the game's own `graphics/fonts` folder and those of every enabled mod) and offers
+  them in an in-panel picker; the choice is remembered. Defaults to the game's own `victor16.fnt`.
 
 **Requirements**: Console Commands 4.0.x (`lw_console`) and LazyLib. LunaLib is optional.
 **Install**: drop the `ConsoleFrontend` folder into `Starsector/mods/`, then enable it in the launcher.
@@ -38,12 +38,14 @@ every console command gets a clickable button, so you never have to remember com
 - **中文界面**：默认使用游戏内置、且已含 CJK 字形的 `graphics/fonts/victor16.fnt`
   （直接从游戏自带的字库读取）。
   若未安装汉化包，可在设置中开启 `使用英文标签`。
-- **内置字体（可选，默认关闭）**：带字体的发行包额外内置像素字体 **Zpix**（MIT 许可，可自由使用），
-  提供 **12 / 14 / 16 / 18 / 20 / 22 / 24** 七档字号，可在游戏内 Mod 设置里开启并自由调节。
-  开启后正文、标签、文本框与按钮统一改用该字体：除了中文更清晰，它还**带真正的小写字母**——
-  游戏自带的 victor 系列是小体大写（small-caps）字库，小写字形就是大写形状，
-  因此像 `psm_addShipXP` 这样的命令名会显示成 `PSM_ADDSHIPXP`，开启内置字体后按原样显示。
-  关闭该选项时显示与不带字体的版本完全一致。
+- **界面字体可选（不打包任何字体）**：本 mod 自身不含字体，而是**扫描你已装好的字体**——
+  游戏本体的 `starsector-core/graphics/fonts` 与每个已启用 Mod 的 `graphics/fonts`
+  （读取每个 `.fnt` 表头拿行高与中文字形数）。点面板顶部的 **字体** 按钮即可在选择器里挑选，
+  含中文字形的排在最前面，选中立即生效并记住（`saves/common/config/console_frontend_font.json.data`）。
+  想换字体时把 `.fnt`（连同同名 `_0.png`）放进任一 `graphics/fonts` 目录，重开面板即出现在列表里。
+  若换用**带真正小写字母**的字体（游戏自带的 victor 系列是小体大写 small-caps 字库，
+  小写字形就是大写形状，因此 `psm_addShipXP` 会显示成 `PSM_ADDSHIPXP`），命令名就会按原样显示。
+  未选择任何字体时，外观与 0.1.1 完全一致。
 
 ## 安装
 
@@ -68,10 +70,8 @@ every console command gets a clickable button, so you never have to remember com
 .\build.ps1 -Deploy
 ```
 
-> 打包/部署「带内置字体」的版本时，字体资产需放在 `_release\fonts\out2\`
-> （`cf_zpix_<字号>.fnt` 与同名 `_0.png`，共 14 个文件约 5.8MB）。
-> 该目录刻意不进版本库，因此从仓库副本直接构建只会得到「不带字体」的版本：
-> `build.ps1 -Deploy` 检测到该目录不存在时会跳过字体，不会报错。
+> 本 mod 不打包任何字体，构建产物里没有任何字体资产；
+> `build.ps1 -Deploy` 会顺手清掉部署目录里早期「内置字体」版本遗留的 `cf_zpix_*`。
 
 可用参数：
 
@@ -128,7 +128,7 @@ $JdkDir        = 'C:\Program Files\Java\jdk-21\bin'
 ## 控制台命令
 
 ```
-consolefrontend [open|close|reload|resetparams]
+consolefrontend [open|close|reload|resetparams|resetfont]
 ```
 
 ## 依赖

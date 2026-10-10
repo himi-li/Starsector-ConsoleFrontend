@@ -25,62 +25,25 @@ public final class FrontendSettings {
     public static int pickerPageSize = 40;
     public static boolean useEnglishLabels = false;
 
-    /** 是否使用 mod 内置字体（Zpix，MIT）。默认关闭。 */
-    public static boolean builtinFont = false;
-    /** 内置字体字号，可选 12/14/16/18/20/22/24。 */
-    public static int fontSize = 16;
+    /** 未选择自定义字体时使用的游戏自带字体，也是自定义字体不可用时的回退字体。 */
+    public static final String FALLBACK_FONT_PATH = "graphics/fonts/victor16.fnt";
 
-    /** 内置字体可选的七档字号；LunaSettings 用 Int 输入框，落到非档位值时就近吸附。 */
-    public static final int[] FONT_SIZES = {12, 14, 16, 18, 20, 22, 24};
-
-    /** 把任意字号吸附到最近的已内置档位。 */
-    public static int clampFontSize(int v) {
-        int best = FONT_SIZES[0];
-        int bestDist = Math.abs(v - best);
-        for (int i = 1; i < FONT_SIZES.length; i++) {
-            int d = Math.abs(v - FONT_SIZES[i]);
-            if (d < bestDist) {
-                bestDist = d;
-                best = FONT_SIZES[i];
-            }
-        }
-        return best;
-    }
+    /** 回退字体的行高（victor16.fnt 表头 common lineHeight）。 */
+    public static final float FALLBACK_LINE_HEIGHT = 18f;
 
     /**
-     * 当前应使用的正文 / 标签 / 文本框字体路径。
+     * 界面字体由 <b>运行时探测 + 玩家选择</b>决定，本 mod 不打包任何字体。
      *
-     * <p>不带字体版恒为游戏自带的 victor16.fnt（行为与 0.1.1 逐位一致）；
-     * 启用内置字体时换成 mod 自带的 Zpix 像素字体
-     * （graphics/fonts/cf_zpix_NN.fnt，.fnt 与同名 _0.png 一起放在 graphics/fonts 下）。
-     */
-    public static String paraFontPath() {
-        if (!builtinFont) {
-            return "graphics/fonts/victor16.fnt";
-        }
-        return "graphics/fonts/cf_zpix_" + clampFontSize(fontSize) + ".fnt";
-    }
-
-    /**
-     * 当前字体的行高（像素）。
+     * <p>{@link FontCatalog} 扫描游戏本体与各 enabled mod 的 {@code graphics/fonts}
+     * 目录（读 .fnt 表头拿行高与中文字形数），玩家在面板内的字体选择器里挑；
+     * 选中的路径由 {@link FontStore} 记住（saves/common/config/console_frontend_font.json.data）。
      *
-     * <p>数值取自各 .fnt 表头的 common lineHeight：victor16 = 18，
-     * Zpix 七档依次为 12/15/17/18/21/23/24。纵向布局常量全部按它缩放。
+     * <p><b>注意</b>：字体路径写进控件前必须先经 {@code SettingsAPI.loadFont(path)} 注册 ——
+     * 游戏按路径查字体表（{@code com.fs.graphics.A.D} 只查表、不按需加载），
+     * 未注册的路径查表得 null，随后测量文本对 null 调 {@code $dynfontRawNominal()}
+     * 抛 NPE，整个面板变空白（实测）。注册成功与否由
+     * {@code FrontendPanel.prepareFont()} 判定，失败一律回退到自带 victor16。
      */
-    public static float paraLineHeight() {
-        if (!builtinFont) {
-            return 18f;
-        }
-        switch (clampFontSize(fontSize)) {
-            case 12: return 12f;
-            case 14: return 15f;
-            case 16: return 17f;
-            case 18: return 18f;
-            case 20: return 21f;
-            case 22: return 23f;
-            default: return 24f;
-        }
-    }
 
     private FrontendSettings() {
     }
