@@ -112,6 +112,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      */
     private List<IdOption> pickerSuggestions;
 
+    /**
+     * 选择器的候选是否为「该参数的预设取值」（枚举 options）。
+     *
+     * <p>与 {@link #pickerSuggestions} 的区别在于文案：枚举选项来自命令参数自身的定义
+     * （devmode 的状态 = 留空 / on / off），不是命令的自动补全接口，标题与页脚要分开说。
+     */
+    private boolean pickerEnum;
+
     private final Map<String, List<IdOption>> idCache = new HashMap<String, List<IdOption>>();
 
     private final Map<String, TextFieldAPI> fields = new LinkedHashMap<String, TextFieldAPI>();
@@ -720,9 +728,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             if (p.isPicker()) {
                 float pickW = Math.max(80f, ctlW - 32f);
                 textField(box, ctlX, fy, pickW, 24f, val, key);
+                String pickTip = ParamSpec.TYPE_ENUM.equals(p.type)
+                        ? "打开该参数的取值列表（可搜索）"
+                        : "打开" + IdSource.displayNameOf(p.source) + "选择器（可搜索，名称优先）";
                 button(box, ctlX + pickW + 4f, fy, 28f, 24f, "v",
                         "pickopen|" + e.command + "|" + p.key,
-                        escapePercent("打开" + IdSource.displayNameOf(p.source) + "选择器（可搜索，名称优先）"));
+                        escapePercent(pickTip));
             } else if (p.isNumeric()) {
                 float stepW = 30f;
                 float fw = Math.max(80f, ctlW - stepW * 2f - 8f);
@@ -958,9 +969,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         tm.setParaFont(FONT_PARA);
         // 有命令自带建议时，选择器的语义是「这个参数允许的取值」，
         // 不再是「游戏里的所有商品/物品」，标题要跟着变。
-        String pickerTitle = pickerSuggestions != null
+        String pickerTitle = pickerEnum
+                ? "选择参数值（该参数的预设选项）"
+                : (pickerSuggestions != null
                 ? "选择参数值（候选来自该命令的自动补全）"
-                : "选择" + IdSource.displayNameOf(pickerSource) + "（名称优先，括号内为 ID）";
+                : "选择" + IdSource.displayNameOf(pickerSource) + "（名称优先，括号内为 ID）");
         tm.addPara(escapePercent(pickerTitle), 8f, Misc.getBrightPlayerColor());
 
         // 第二行：搜索框（左侧）+ 来源标签（右侧）+ 取消
@@ -1056,9 +1069,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - (pgW * 2f + pgGap) - 60f), 28f, false);
         box.addUIElement(foot).inTL(12f, areaH - 36f);
         String footText = "共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages + " 页（每页 " + perPage + " 项）";
-        footText += pickerSuggestions != null
+        footText += pickerEnum
+                ? " · 也可直接在输入框里填写其他取值"
+                : (pickerSuggestions != null
                 ? " · 候选由该命令自身的自动补全接口给出"
-                : " · 可直接输入名称或 ID 搜索";
+                : " · 可直接输入名称或 ID 搜索");
         foot.addPara(escapePercent(footText), 5f, Misc.getGrayColor());
 
         place(box, x, y);
@@ -1874,6 +1889,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             } else if ("pickcancel".equals(id)) {
                 pickerOpen = false;
                 pickerSuggestions = null;
+                pickerEnum = false;
                 needsRebuild = true;
             } else if (id.startsWith("pickerpage|")) {
                 pickerPage += "next".equals(id.substring(11)) ? 1 : -1;
@@ -2085,12 +2101,22 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             if (p.key.equals(paramKey)) {
                 pickerCommand = command;
                 pickerParamKey = paramKey;
+                // 枚举参数（devmode 的状态、god 的目标…）的可选值就写在参数定义里，
+                // 之前没有用它，反倒因为「没有 source」回落成全部商品列表（实测报错就是这个）。
+                boolean isEnum = ParamSpec.TYPE_ENUM.equals(p.type);
+                List<IdOption> choices = isEnum ? enumChoices(p) : null;
                 boolean derived = p.source == null || p.source.isEmpty();
-                pickerSource = derived ? IdSource.COMMODITY_SPECIAL : p.source;
-                // 只有「参数没有精选来源」时才用命令自带的建议：
-                // 精选过 source 的命令，我们已经有带中文名与来源标签的全量列表，
-                // 比只给一串 ID（建议接口只返回 String）更好用。
-                pickerSuggestions = derived ? suggestionsFor(e, i) : null;
+                pickerEnum = choices != null;
+                if (pickerEnum) {
+                    pickerSource = "";
+                    pickerSuggestions = choices;
+                } else {
+                    pickerSource = derived ? IdSource.COMMODITY_SPECIAL : p.source;
+                    // 只有「参数没有精选来源」时才用命令自带的建议：
+                    // 精选过 source 的命令，我们已经有带中文名与来源标签的全量列表，
+                    // 比只给一串 ID（建议接口只返回 String）更好用。
+                    pickerSuggestions = derived ? suggestionsFor(e, i) : null;
+                }
                 pickerOpen = true;
                 pickerPage = 0;
                 pickerQuery = "";
@@ -2138,8 +2164,34 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         ParamStore.set(pickerCommand, pickerParamKey, id);
         pickerOpen = false;
         pickerSuggestions = null;
-        statusLine = "已选择: " + id;
+        pickerEnum = false;
+        statusLine = "已选择: " + (id == null || id.isEmpty() ? "（留空）" : id);
         needsRebuild = true;
+    }
+
+    /**
+     * 枚举参数的候选：优先用参数定义里的 options；没有 options 的 on/off 类参数给开/关两项。
+     *
+     * <p>空串选项（如 devmode 的「留空=切换」）会显示成「（留空）」，
+     * 否则按钮上会是一段没有文字的空白。
+     */
+    private static List<IdOption> enumChoices(ParamSpec p) {
+        List<IdOption> out = new ArrayList<IdOption>();
+        List<String> opts = p == null ? null : p.options;
+        if (opts != null && !opts.isEmpty()) {
+            for (String o : opts) {
+                String v = o == null ? "" : o;
+                out.add(new IdOption(v, enumLabel(v), "", ""));
+            }
+            return out;
+        }
+        out.add(new IdOption("on", "开 (on)", "", ""));
+        out.add(new IdOption("off", "关 (off)", "", ""));
+        return out;
+    }
+
+    private static String enumLabel(String v) {
+        return v == null || v.isEmpty() ? "（留空）" : v;
     }
 
     private List<IdOption> idOptions(String source) {
