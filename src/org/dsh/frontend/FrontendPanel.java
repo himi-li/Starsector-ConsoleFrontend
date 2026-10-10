@@ -168,30 +168,37 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     // ---- 纵向布局常量（自上而下，单位像素）----
     //
+    // 【为什么是实例字段】这些数字原本是 static final 的固定值（按 victor16 的行高 18 手工标定）。
+    // 现在字号可由玩家在 12~24 之间切换，行高随之变化，固定值会把控件压字或留出大片空洞，
+    // 因此改为实例字段，统一由 {@link #layoutMetrics()} 在每次 rebuild() 开头按
+    // {@link FrontendSettings#paraLineHeight()} 等比换算。行高 18 时换算结果与原值逐位一致。
+    //
     // 注意：原版 TextFieldAPI 的<b>实际渲染高度大于请求高度</b>——
     // 请求 24px 时实测约占 40px（与字体行高有关）。因此行距不能按请求高度算，
     // 必须按【最坏情况渲染高度】留白，否则搜索框底部会压到下一行的标签栏。
-    // 下面每行的可用高度都按 40px 预留。
-    private static final float Y_HEADER = 8f;
-    private static final float H_HEADER = 30f;
+    private float Y_HEADER = 8f;
+    private float H_HEADER = 30f;
 
-    private static final float Y_SEARCH = 46f;
-    private static final float H_SEARCH = 34f;
+    private float Y_SEARCH = 46f;
+    private float H_SEARCH = 34f;
     /** 搜索框请求高度（实际渲染高度约为请求值 +20，故下一行要按 44px 预留）。 */
-    private static final float H_SEARCH_FIELD = 22f;
+    private float H_SEARCH_FIELD = 22f;
 
     /** 标签行的 y：必须 ≥ Y_SEARCH + 44，实测取 104 时仍有轻微接触，故留到 108。 */
-    private static final float Y_CATEGORY = 108f;
-    private static final float H_CATEGORY = 30f;
+    private float Y_CATEGORY = 108f;
+    private float H_CATEGORY = 30f;
 
     /** 参数区 / 按钮列表区的起始 y。 */
-    private static final float Y_CONTENT = 152f;
+    private float Y_CONTENT = 152f;
 
     /** 日志区高度（比早期的 150 加高，一页能多显示两行）。 */
-    private static final float LOG_AREA_H = 190f;
+    private float LOG_AREA_H = 190f;
 
     /** 日志正文行高（victor16 行高 18，留 1px 余量）。 */
-    private static final float LOG_LINE_H = 19f;
+    private float LOG_LINE_H = 19f;
+
+    /** addPara 到「文字 ink 垂直中心」的距离占行高的比例（标定见 {@link #labelInkCenter()}）。 */
+    private static final float LABEL_INK_CENTER_RATIO = 26f / 18f;
 
     /**
      * 正文 / 标签 / 文本框字体。
@@ -201,11 +208,75 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      * 文本框的 4 参重载 {@code addTextField(w,h,font,pad)} 同样接受字面路径。
      * victor16.fnt 行高 18（victor14 只有 13），中文 6738 字形齐全。
      *
-     * <p><b>按钮不能跟着换</b>：{@code setButtonFont*} 只有 7 个固定字面量，没有
-     * {@code setButtonFont(String)}；其中最大的 orbitron20aa/24aa 缺 181 个汉字
-     * （逐字形核对），物品/船名会变方块 —— 故按钮保持 Victor14。
+     * <p><b>字体与字号</b>：默认维持 victor16 不变（不带字体版）。玩家开启「使用内置字体」后，
+     * 正文走 mod 自带的 Zpix（{@link FrontendSettings#paraFontPath()}），按钮走
+     * {@link #btnFontPath()} —— 按钮字体在 {@link #button} 里经反射直写
+     * {@code private.public$if} 字段，因此不再受 7 个 {@code setButtonFont*} 字面量的限制。
+     * 缺字形时的显示安全由随字体一起打包的 Zpix 位图（6754 字形，含全部 ASCII 与常用汉字）保证。
      */
-    private static final String FONT_PARA = "graphics/fonts/victor16.fnt";
+    private String fontPath() {
+        return FrontendSettings.paraFontPath();
+    }
+
+    /**
+     * 按钮文字字体路径。
+     *
+     * <p>三条分支的共同约束是<b>必须有真小写</b>：victor10/14/16 是「小型大写」字库
+     * （小写字形就是大写形状，逐字形位图比对 victor10 26/26 相同、victor14 10/26 相同），
+     * 用它渲染 psm_addShipXP 会变成 PSM_ADDSHIPXP。
+     *
+     * <ul>
+     *   <li>内置字体开启：一律用 Zpix（真小写 + 中文齐全），行高随字号变化。</li>
+     *   <li>内置字体关闭且文字含中文：victor14（行高 13、中文 6735 字形）——
+     *       游戏自带唯一「既小又含中文」的按钮字体，只能接受它的小型大写外观。</li>
+     *   <li>内置字体关闭且纯英文：orbitron12condensed（{@code setButtonFontDefault()} 的字面量，
+     *       行高 16、6506 字形，26 个小写字母都是独立字形）。</li>
+     * </ul>
+     */
+    private String btnFontPath() {
+        if (FrontendSettings.builtinFont) {
+            return fontPath();
+        }
+        return "graphics/fonts/orbitron12condensed.fnt";
+    }
+
+    /**
+     * 按当前字体行高重算全部纵向布局常量与控件高度。
+     *
+     * <p>基准是 victor16 的行高 18：{@code s = 行高 / 18}，所有数字乘 {@code s} 后
+     * 取整到 0.5 像素（避免半像素造成的模糊与 1px 缝隙）。行高 18 时 {@code s = 1}，
+     * 结果与原 static final 常量完全一致，不带字体的版本行为不变。
+     *
+     * <p>唯一例外是<b>高倍字号下的纵向间距</b>：文字变大后相邻行会挤在一起，
+     * 因此行间距额外加 {@code (s-1) * 6}，字号 24（s≈1.33）时约多 2px。
+     */
+    private void layoutMetrics() {
+        float lh = FrontendSettings.paraLineHeight();
+        float s = lh / 18f;
+        // 行间距的额外补偿：字号越大，行与行之间需要的空隙越多。
+        float pad = (s - 1f) * 6f;
+
+        Y_HEADER = snap(8f, s);
+        H_HEADER = snap(30f, s);
+        Y_SEARCH = snap(46f, s);
+        H_SEARCH = snap(34f, s) + pad;
+        H_SEARCH_FIELD = snap(22f, s);
+        Y_CATEGORY = snap(108f, s) + pad;
+        H_CATEGORY = snap(30f, s) + pad;
+        Y_CONTENT = snap(152f, s) + pad * 2f;
+        LOG_AREA_H = snap(190f, s) + pad * 2f;
+        LOG_LINE_H = lh + 1f;
+    }
+
+    /** 按比例缩放并取整到 0.5 像素。 */
+    private static float snap(float v, float s) {
+        return Math.round(v * s * 2f) / 2f;
+    }
+
+    /** 控件高度按比例缩放（文本框与按钮共用）。 */
+    private float m(float v) {
+        return snap(v, FrontendSettings.paraLineHeight() / 18f);
+    }
 
     private float lastW;
     private float lastH;
@@ -540,6 +611,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         float w = bgPanel.getPosition().getWidth();
         float h = bgPanel.getPosition().getHeight();
+        // 先把纵向布局常量按当前字体行高换算好，后面所有区域都用换算后的值。
+        layoutMetrics();
         // 左右各留 8px 安全边距：host 面板若比请求尺寸略窄，
         // 用 rowW = w - margin*2 计算的右对齐元素会被裁掉（实测右列缺一半）。
         float margin = 20f;
@@ -612,10 +685,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         TooltipMakerAPI tm = row.createUIElement(rowW - 140f, H_HEADER, false);
         row.addUIElement(tm).inTL(0f, 4f);
-        tm.setParaFont(FONT_PARA);
+        tm.setParaFont(fontPath());
         tm.addPara("控制台前端 · 命令按钮    热键 " + FrontendSettings.hotkeyText(), 8f, Misc.getBrightPlayerColor());
 
-        button(row, rowW - 130f, 2f, 124f, 24f, "关闭 (ESC)", "close", "关闭面板并恢复游戏状态");
+        button(row, rowW - 130f, 2f, 124f, m(24f), "关闭 (ESC)", "close", "关闭面板并恢复游戏状态");
         place(row, margin, Y_HEADER);
     }
 
@@ -632,8 +705,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float fieldW = Math.max(120f, rowW - 44f - 250f - 12f);
         textField(row, 44f, 0f, fieldW, H_SEARCH_FIELD, query, "search");
 
-        button(row, rowW - 240f, 0f, 112f, 22f, "刷新目录", "refresh", "重新读取全部命令与 ID 列表");
-        button(row, rowW - 122f, 0f, 112f, 22f, "清空搜索", "clearsearch", null);
+        button(row, rowW - 240f, 0f, 112f, m(22f), "刷新目录", "refresh", "重新读取全部命令与 ID 列表");
+        button(row, rowW - 122f, 0f, 112f, m(22f), "清空搜索", "clearsearch", null);
         place(row, margin, Y_SEARCH);
     }
 
@@ -687,31 +760,31 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         // 行高 46：给原生文本框的实际渲染高度留余量。文本框请求 24 时实测渲染约 40
         // （对应 victor14，行高 13）；victor16 行高 18，按比例再加约 5px ⇒ 46。
         // 行距不放宽的话，相邻两行的文本框会互相压字（实测过）。
-        final float lineH = 46f;
+        final float lineH = m(46f);
         int lines = 1 + Math.max(1, e.params.size()) + 1;
-        float areaH = lines * lineH + 24f;
+        float areaH = lines * lineH + m(24f);
 
         CustomPanelAPI box = newPanel(rowW, areaH);
         // 九宫格背景：游戏没有整块窗口素材，panel00_* 是 32x32 的九宫格切片。
         // 用 SolidBgPlugin 直接铺一层不透明底色（最稳），避免与下方列表区文字穿透。
         drawPanelBackground(box, rowW, areaH);
 
-        TooltipMakerAPI tm = box.createUIElement(rowW - 20f, 32f, false);
+        TooltipMakerAPI tm = box.createUIElement(rowW - 20f, m(32f), false);
         box.addUIElement(tm).inTL(12f, 6f);
-        tm.setParaFont(FONT_PARA);
+        tm.setParaFont(fontPath());
         tm.addPara(escapePercent("参数设置 · " + e.labelOrName()), 8f, Misc.getBrightPlayerColor());
 
         // 右侧预留：数字参数的 -/+ 两个按钮（各 30 宽）或选择器的 v 按钮（30 宽）
-        final float rightReserve = 78f;
-        final float labelW = 120f;
+        final float rightReserve = m(78f);
+        final float labelW = m(120f);
         final float leftPad = 12f;
 
-        float fy = 40f;
+        float fy = m(40f);
         for (ParamSpec p : e.params) {
             // 标签与控件同 y、垂直居中（文本框实际渲染更高，标签偏上会显错位）
             TooltipMakerAPI lt = box.createUIElement(labelW, lineH, false);
             box.addUIElement(lt).inTL(leftPad, fy);
-            lt.setParaFont(FONT_PARA);
+            lt.setParaFont(fontPath());
             LabelAPI lab = lt.addPara(escapePercent(p.labelOrKey() + (p.required ? " *" : "")), 8f,
                     p.required ? Misc.getHighlightColor() : Misc.getGrayColor());
             try {
@@ -726,42 +799,43 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             String val = valueOf(e, p);
 
             if (p.isPicker()) {
-                float pickW = Math.max(80f, ctlW - 32f);
-                textField(box, ctlX, fy, pickW, 24f, val, key);
+                float pickW = Math.max(80f, ctlW - m(32f));
+                textField(box, ctlX, fy, pickW, m(24f), val, key);
                 String pickTip = ParamSpec.TYPE_ENUM.equals(p.type)
                         ? "打开该参数的取值列表（可搜索）"
                         : "打开" + IdSource.displayNameOf(p.source) + "选择器（可搜索，名称优先）";
-                button(box, ctlX + pickW + 4f, fy, 28f, 24f, "v",
+                button(box, ctlX + pickW + 4f, fy, m(28f), m(24f), "v",
                         "pickopen|" + e.command + "|" + p.key,
                         escapePercent(pickTip));
             } else if (p.isNumeric()) {
-                float stepW = 30f;
+                float stepW = m(30f);
                 float fw = Math.max(80f, ctlW - stepW * 2f - 8f);
-                textField(box, ctlX, fy, fw, 24f, val, key);
-                button(box, ctlX + fw + 4f, fy, stepW, 24f, "-",
+                textField(box, ctlX, fy, fw, m(24f), val, key);
+                button(box, ctlX + fw + 4f, fy, stepW, m(24f), "-",
                         "pstep|" + e.command + "|" + p.key + "|dec", "减少");
-                button(box, ctlX + fw + stepW + 4f, fy, stepW, 24f, "+",
+                button(box, ctlX + fw + stepW + 4f, fy, stepW, m(24f), "+",
                         "pstep|" + e.command + "|" + p.key + "|inc", "增加");
             } else if (ParamSpec.TYPE_BOOL.equals(p.type)) {
                 boolean on = isOn(val);
-                button(box, ctlX, fy, 120f, 24f, on ? "开 (ON)" : "关 (OFF)",
+                button(box, ctlX, fy, m(120f), m(24f), on ? "开 (ON)" : "关 (OFF)",
                         "pbool|" + e.command + "|" + p.key, "点击切换");
             } else {
-                textField(box, ctlX, fy, ctlW, 24f, val, key);
+                textField(box, ctlX, fy, ctlW, m(24f), val, key);
             }
             fy += lineH;
         }
         if (e.params.isEmpty()) {
             TooltipMakerAPI nt = box.createUIElement(rowW - 24f, lineH, false);
             box.addUIElement(nt).inTL(leftPad, fy);
+            nt.setParaFont(fontPath());
             nt.addPara("该命令没有参数，点击主按钮直接执行。", 6f, Misc.getGrayColor());
             fy += lineH;
         }
 
         // 底部行：三个按钮靠右固定，预览文本占据左侧剩余宽度
-        float btnW1 = 90f;
-        float btnW2 = 100f;
-        float btnW3 = 90f;
+        float btnW1 = m(90f);
+        float btnW2 = m(100f);
+        float btnW3 = m(90f);
         float gapB = 6f;
         float btnsTotal = btnW1 + btnW2 + btnW3 + gapB * 2f;
         float pvX = leftPad;
@@ -772,11 +846,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         previewLabel = pv.addPara(escapePercent(previewText(e)), 6f, Misc.getHighlightColor());
 
         float bx = rowW - btnsTotal - 8f;
-        button(box, bx, fy, btnW1, 24f, "执行", "run|" + e.command, "用当前参数执行一次");
+        button(box, bx, fy, btnW1, m(24f), "执行", "run|" + e.command, "用当前参数执行一次");
         bx += btnW1 + gapB;
-        button(box, bx, fy, btnW2, 24f, "恢复默认", "reset|" + e.command, "清除该命令已记住的参数");
+        button(box, bx, fy, btnW2, m(24f), "恢复默认", "reset|" + e.command, "清除该命令已记住的参数");
         bx += btnW2 + gapB;
-        button(box, bx, fy, btnW3, 24f, "收起", "editclose", null);
+        button(box, bx, fy, btnW3, m(24f), "收起", "editclose", null);
 
         place(box, margin, y);
         // 返回真实占用高度供列表区下移；必须 >= areaH，
@@ -788,7 +862,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float rowW = w - margin * 2f;
         float y = Y_CONTENT + paramsH;
         // 210 而不是早期的 200：日志区加高到 190 且底部留白 14，需要相应下移列表区下边界。
-        float bottom = FrontendSettings.showOutputLog ? 212f : 40f;
+        float bottom = FrontendSettings.showOutputLog ? m(212f) : 40f;
         float areaH = Math.max(140f, h - y - bottom);
 
         List<CatalogEntry> list = catalog.filter(category, query, FrontendSettings.showUnavailable);
@@ -812,7 +886,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         area.addUIElement(content).inTL(0f, 0f);
 
         // 再减 10px：给右边界留余量，避免最后一列被面板边缘裁切（实测右列缺一半）
-        float cellW = (rowW - gap * (cols - 1) - 24f) / cols;
+        float cellW = (rowW - gap * (cols - 1) - m(24f)) / cols;
         // 逐行构建：每行是一个 row 面板，行内按钮用绝对位置，行与行之间交给 addCustom 的流式布局
         for (int start = from; start < to; start += cols) {
             int end = Math.min(to, start + cols);
@@ -823,7 +897,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 float cx = (i - start) * (cellW + gap);
 
                 boolean hasEdit = e.hasParams();
-                float editW = hasEdit ? 24f : 0f;
+                float editW = hasEdit ? m(24f) : 0f;
                 float mainW = cellW - editW - (hasEdit ? 3f : 0f);
 
                 ButtonAPI main = button(rowPanel, cx, 0f, mainW, FrontendSettings.buttonHeight,
@@ -841,18 +915,18 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             content.addCustom(rowPanel, 4f);
         }
 
-        TooltipMakerAPI footer = area.createUIElement(Math.max(120f, rowW - 280f), 32f, false);
-        area.addUIElement(footer).inTL(6f, areaH - 24f);
+        TooltipMakerAPI footer = area.createUIElement(Math.max(120f, rowW - m(280f)), m(32f), false);
+        area.addUIElement(footer).inTL(6f, areaH - m(24f));
         String info = "共 " + list.size() + " 条 · 第 " + (page + 1) + "/" + pages + " 页";
         if (statusLine != null && !statusLine.isEmpty()) {
             info = statusLine + "    " + info;
         }
-        footer.setParaFont(FONT_PARA);
+        footer.setParaFont(fontPath());
         footer.addPara(escapePercent(info), 8f, Misc.getGrayColor());
 
         if (pages > 1) {
-            button(area, rowW - 260f, areaH - 26f, 80f, 22f, "上一页", "page|prev", null);
-            button(area, rowW - 176f, areaH - 26f, 80f, 22f, "下一页", "page|next", null);
+            button(area, rowW - m(260f), areaH - m(26f), m(80f), m(22f), "上一页", "page|prev", null);
+            button(area, rowW - m(176f), areaH - m(26f), m(80f), m(22f), "下一页", "page|next", null);
         }
 
         place(area, margin, y);
@@ -913,20 +987,20 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             title = title + "      共 " + lines.size() + " 行 · 第 " + (logPage + 1) + "/" + pages
                     + " 页（滚轮或右侧按钮翻页）";
         }
-        TooltipMakerAPI tm = area.createUIElement(Math.max(120f, rowW - 320f), 32f, false);
+        TooltipMakerAPI tm = area.createUIElement(Math.max(120f, rowW - m(320f)), m(32f), false);
         area.addUIElement(tm).inTL(8f, 4f);
-        tm.setParaFont(FONT_PARA);
+        tm.setParaFont(fontPath());
         tm.addPara(escapePercent(title), 6f, Misc.getBrightPlayerColor());
 
-        button(area, rowW - 100f, 2f, 92f, 22f, "清空日志", "clearlog", "清空控制台输出缓冲");
+        button(area, rowW - m(100f), 2f, m(92f), m(22f), "清空日志", "clearlog", "清空控制台输出缓冲");
         if (pages > 1 && rowW > 400f) {
-            button(area, rowW - 170f, 2f, 64f, 22f, "下一页", "logpage|next", "查看更早的输出（滚轮向下同理）");
-            button(area, rowW - 240f, 2f, 64f, 22f, "上一页", "logpage|prev", "回到更新的输出（滚轮向上同理）");
+            button(area, rowW - m(170f), 2f, m(64f), m(22f), "下一页", "logpage|next", "查看更早的输出（滚轮向下同理）");
+            button(area, rowW - m(240f), 2f, m(64f), m(22f), "上一页", "logpage|prev", "回到更新的输出（滚轮向上同理）");
         }
 
-        TooltipMakerAPI log = area.createUIElement(rowW - 16f, areaH - 44f, true);
-        area.addUIElement(log).inTL(8f, 40f);
-        log.setParaFont(FONT_PARA);
+        TooltipMakerAPI log = area.createUIElement(rowW - 16f, areaH - m(44f), true);
+        area.addUIElement(log).inTL(8f, m(40f));
+        log.setParaFont(fontPath());
         log.addPara(escapePercent(pageText), 6f, Misc.getTextColor());
         // 只记录滚动器，滚动动作交给 advance() 每帧执行。
         //
@@ -964,9 +1038,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         // 与参数区一致：九宫格背景，避免与底层内容视觉穿透
         drawPanelBackground(box, rowW, areaH);
 
-        TooltipMakerAPI tm = box.createUIElement(rowW - 24f, 32f, false);
+        TooltipMakerAPI tm = box.createUIElement(rowW - 24f, m(32f), false);
         box.addUIElement(tm).inTL(12f, 8f);
-        tm.setParaFont(FONT_PARA);
+        tm.setParaFont(fontPath());
         // 有命令自带建议时，选择器的语义是「这个参数允许的取值」，
         // 不再是「游戏里的所有商品/物品」，标题要跟着变。
         String pickerTitle = pickerEnum
@@ -977,36 +1051,36 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         tm.addPara(escapePercent(pickerTitle), 8f, Misc.getBrightPlayerColor());
 
         // 第二行：搜索框（左侧）+ 来源标签（右侧）+ 取消
-        final float row2Y = 48f;
-        final float tabW = 92f;
+        final float row2Y = m(48f);
+        final float tabW = m(92f);
         final float tabGap = 6f;
-        final float cancelW = 72f;
+        final float cancelW = m(72f);
         // 建议模式下没有「来源」可切（候选本来就不是按 spec 枚举来的），不显示标签页。
         List<String> tabs = pickerSuggestions != null
                 ? new ArrayList<String>() : IdSource.tabsFor(pickerSource);
         float rightBlock = tabs.size() * (tabW + tabGap) + cancelW + 12f;
-        float pickFieldW = Math.max(120f, rowW - 24f - rightBlock);
-        textField(box, 12f, row2Y, pickFieldW, 24f, pickerQuery, "picker");
+        float pickFieldW = Math.max(120f, rowW - m(24f) - rightBlock);
+        textField(box, 12f, row2Y, pickFieldW, m(24f), pickerQuery, "picker");
 
         float tx = 12f + pickFieldW + 12f;
         for (String t : tabs) {
-            ButtonAPI b = button(box, tx, row2Y, tabW, 24f, IdSource.displayNameOf(t),
+            ButtonAPI b = button(box, tx, row2Y, tabW, m(24f), IdSource.displayNameOf(t),
                     "picksrc|" + t, null);
             if (t.equals(pickerSource)) {
                 b.setEnabled(false);
             }
             tx += tabW + tabGap;
         }
-        button(box, rowW - cancelW - 12f, row2Y, cancelW, 24f, "取消", "pickcancel", null);
+        button(box, rowW - cancelW - 12f, row2Y, cancelW, m(24f), "取消", "pickcancel", null);
 
         List<IdOption> all = pickerSuggestions != null ? pickerSuggestions : idOptions(pickerSource);
         List<IdOption> filtered = IdSource.filter(all, pickerQuery);
 
-        float listY = 82f;
-        float listH = Math.max(40f, areaH - listY - 48f);
-        // 行高 34：victor16 行高 18（victor14 为 13），行内按钮与 ID 注释都要跟着长高。
-        float lineH = 34f;
-        float innerW = rowW - 56f;
+        float listY = m(82f);
+        float listH = Math.max(40f, areaH - listY - m(48f));
+        // 行高 34（= m(34f)）：victor16 行高 18（victor14 为 13），行内按钮与 ID 注释都要跟着长高。
+        float lineH = m(34f);
+        float innerW = rowW - m(56f);
 
         // ---- 分页（滚动条方案已放弃）----
         // 试过两轮"内容面板撑到总高 + createUIElement(...,true)"的三层结构
@@ -1026,8 +1100,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         // 行数与行高都不再需要留滚动余量，容器高度就等于本页实际高度。
         float pageH = Math.max(lineH, (to - from) * lineH);
-        CustomPanelAPI listPanel = newPanel(rowW - 24f, pageH);
-        TooltipMakerAPI list = listPanel.createUIElement(rowW - 24f, pageH, false);
+        CustomPanelAPI listPanel = newPanel(rowW - m(24f), pageH);
+        TooltipMakerAPI list = listPanel.createUIElement(rowW - m(24f), pageH, false);
         listPanel.addUIElement(list).inTL(0f, 0f);
         for (int i = from; i < to; i++) {
             final IdOption o = filtered.get(i);
@@ -1046,7 +1120,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             if (showId) {
                 TooltipMakerAPI idt = line.createUIElement(innerW * 0.36f, rowH, false);
                 line.addUIElement(idt).inTL(nameW + 4f, 0f);
-                idt.setParaFont(FONT_PARA);
+                idt.setParaFont(fontPath());
                 LabelAPI idLab = idt.addPara(escapePercent(o.secondary()), 8f, Misc.getGrayColor());
                 try {
                     idLab.setAlignment(Alignment.LMID);
@@ -1061,13 +1135,13 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         listPanel.getPosition().inTL(8f, listY);
 
         // 翻页按钮放在页脚右侧，与页脚同一基线
-        float pgW = 80f;
+        float pgW = m(80f);
         float pgGap = 6f;
-        button(box, rowW - (pgW * 2f + pgGap) - 12f, areaH - 36f, pgW, 26f, "上一页", "pickerpage|prev", null);
-        button(box, rowW - pgW - 12f, areaH - 36f, pgW, 26f, "下一页", "pickerpage|next", null);
+        button(box, rowW - (pgW * 2f + pgGap) - 12f, areaH - m(36f), pgW, m(26f), "上一页", "pickerpage|prev", null);
+        button(box, rowW - pgW - 12f, areaH - m(36f), pgW, m(26f), "下一页", "pickerpage|next", null);
 
-        TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - (pgW * 2f + pgGap) - 60f), 28f, false);
-        box.addUIElement(foot).inTL(12f, areaH - 36f);
+        TooltipMakerAPI foot = box.createUIElement(Math.max(120f, rowW - (pgW * 2f + pgGap) - 60f), m(28f), false);
+        box.addUIElement(foot).inTL(12f, areaH - m(36f));
         String footText = "共 " + filtered.size() + " 项 · 第 " + (pickerPage + 1) + "/" + pages + " 页（每页 " + perPage + " 项）";
         footText += pickerEnum
                 ? " · 也可直接在输入框里填写其他取值"
@@ -1204,7 +1278,15 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         // 于是 psm_addShipXP 会显示成 PSM_ADDSHIPXP。setButtonFontDefault() =
         // orbitron12condensed.fnt（lineHeight 16、6506 字形，26 个小写字母都是独立字形），
         // 且不在 addButton 对 victor10/victor14 的特判分支里，是唯一可用的真小写按钮字体。
-        if (CatalogEntry.hasCjk(text)) {
+        // 启用内置字体时，用「内置字体 + 内置字号」的统一字体；否则维持原行为
+        // （中文走 Victor14、纯英文走 setButtonFontDefault() 的 orbitron12condensed）。
+        if (FrontendSettings.builtinFont) {
+            // 反射直写按钮字体字段：7 个 setButtonFont* 都是把字面量写进同一个私有字段
+            // （字段名字面量 private.public$if），所以写它等价于多出一个 setButtonFont(String)。
+            // 先按内置字体设置，写失败也不影响 addButton 的默认分支。
+            tm.setButtonFontDefault();
+            Reflect.setFieldValue(tm, "private.public$if", btnFontPath());
+        } else if (CatalogEntry.hasCjk(text)) {
             tm.setButtonFontVictor14();
         } else {
             tm.setButtonFontDefault();
@@ -1245,13 +1327,15 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
      * 而该文本框的逻辑 y 正是 0（图像 141 ↔ 逻辑 0，比例 1.6）⇒ ink 中心在逻辑 34.1，
      * 即 {@code 8 + 26.1}。所以本常数 = 26f（victor16）。
      */
-    private static final float LABEL_INK_CENTER = 26f;
+    private float labelInkCenter() {
+        return LABEL_INK_CENTER_RATIO * FrontendSettings.paraLineHeight();
+    }
 
     /**
      * 一段纯文字标签（真正的 {@link LabelAPI}，纵向与同排控件居中）。
      *
      * <p>为什么需要这个助手：{@code addPara} 生成的标签先天比 {@code y + pad} 低
-     * 一个行高左右（见 {@link #LABEL_INK_CENTER} 的标定），而按钮与文本框没有这个偏移，
+     * 一个行高左右（见 {@link #labelInkCenter()} 的标定），而按钮与文本框没有这个偏移，
      * 于是同一行里「搜索」二字会明显掉到搜索框下面。反汇编
      * {@code StandardTooltipV2Expandable.addPara(String,Color,float)} 可见首个元素就是
      * {@code panel.add(label); inTL(0, pad)}，偏移不来自这里、也无法从 API 侧关掉，
@@ -1267,9 +1351,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float ch = Math.max(1f, h);
         TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
         host.addUIElement(tm).inTL(x, y);
-        tm.setParaFont(FONT_PARA);
-        // ink 中心 = pad + LABEL_INK_CENTER，令其等于 h/2 即得此行要求的 pad。
-        LabelAPI lab = tm.addPara(escapePercent(text), h / 2f - LABEL_INK_CENTER, color);
+        tm.setParaFont(fontPath());
+        // ink 中心 = pad + labelInkCenter()，令其等于 h/2 即得此行要求的 pad。
+        LabelAPI lab = tm.addPara(escapePercent(text), h / 2f - labelInkCenter(), color);
         try {
             lab.setAlignment(Alignment.TL);
         } catch (Throwable ignored) {
@@ -1293,7 +1377,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         try {
             TooltipMakerAPI tm = host.createUIElement(cw, ch, false);
             host.addUIElement(tm).inTL(x, y);
-            f = tm.addTextField(cw, ch, FONT_PARA, 0f);
+            f = tm.addTextField(cw, ch, fontPath(), 0f);
         } catch (Throwable t) {
             // 退路：3 参重载
             TooltipMakerAPI tm = host.createUIElement(cw, ch, false);

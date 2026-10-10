@@ -16,3 +16,5 @@ cf_rememberParams,记住参数设置,Boolean,true,,开启后，命令参数（�
 cf_idShowSourceMod,选择器显示来源 Mod,Boolean,true,,ID 选择器列表中是否显示每个条目的来源 Mod。,,,
 cf_pickerPageSize,选择器每页条数,Int,40,,ID 选择器列表每页显示的行数。,10,100,
 cf_useEnglishLabels,使用英文标签,Boolean,false,,中文标签显示为方块时开启（未安装中文字体时）。,,,
+cf_builtinFont,使用内置字体,Boolean,false,,开启后正文与按钮改用 mod 内置的像素字体（Zpix，MIT），中文与小写可读性更好；关闭则沿用游戏自带字体。关闭时与旧版显示完全一致。,,,界面
+cf_fontSize,内置字体字号,Int,16,,内置字体的字号（12/14/16/18/20/22/24，会自动吸附到最近的档位）。,12,24,界面

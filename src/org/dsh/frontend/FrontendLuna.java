@@ -108,6 +108,19 @@ public final class FrontendLuna {
         if (b != null) {
             FrontendSettings.useEnglishLabels = b.booleanValue();
         }
+        b = safeBool("cf_builtinFont");
+        if (b != null) {
+            FrontendSettings.builtinFont = b.booleanValue();
+        }
+        try {
+            Integer v = LunaSettings.getInt(MOD, "cf_fontSize");
+            if (v != null) {
+                // 吸附逻辑放在 FrontendSettings：FrontendPanel 也要用，
+                // 而本类 import 了 lunalib，未装 LunaLib 时根本不可加载。
+                FrontendSettings.fontSize = FrontendSettings.clampFontSize(v.intValue());
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     private static Boolean safeBool(String key) {

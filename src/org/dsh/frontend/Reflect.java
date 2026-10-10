@@ -75,6 +75,29 @@ public final class Reflect {
         }
     }
 
+    /**
+     * 写入实例字段。
+     *
+     * <p>用于把按钮字体换成任意路径：`StandardTooltipV2Expandable` 的 7 个
+     * `setButtonFont*` 方法字节码都只是把字面量写进同一个私有字段
+     * （字段名的字面量是 `private.public$if`），因此直接写该字段即可让
+     * `addButton` 使用 mod 自带字体。
+     *
+     * @return 是否写入成功
+     */
+    public static boolean setFieldValue(Object target, String fieldName, Object value) {
+        if (target == null || fieldName == null) {
+            return false;
+        }
+        try {
+            org.lazywizard.console.overlay.v2.misc.ReflectionUtils.set(fieldName, target, value, null);
+            return true;
+        } catch (Throwable t) {
+            warn("ReflectionUtils.set 失败 (" + fieldName + "): " + t);
+            return false;
+        }
+    }
+
     public static boolean hasMethodOfName(Object target, String name) {
         if (target == null || name == null) {
             return false;
