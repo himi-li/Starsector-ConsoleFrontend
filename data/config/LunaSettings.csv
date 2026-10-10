@@ -12,7 +12,7 @@ cf_showUnavailable,显示当前不可用命令,Boolean,false,,开启后，当前
 cf_confirmDestructive,危险操作二次确认,Boolean,true,,执行被标记为危险的命令前弹出确认框。,,,
 cf_showOutputLog,显示输出日志,Boolean,true,,在面板底部显示命令输出。,,,
 cf_logLines,日志行数,Int,60,,日志区显示的行数。,10,200,
-cf_rememberParams,记住参数设置,Boolean,true,,开启后，命令参数（如加金币的数量）会被保存并在下次使用时沿用。,,,
+cf_rememberParams,记住参数设置,Boolean,true,,开启后，命令参数（如加星币的数量）会被保存并在下次使用时沿用。,,,
 cf_idShowSourceMod,选择器显示来源 Mod,Boolean,true,,ID 选择器列表中是否显示每个条目的来源 Mod。,,,
 cf_pickerPageSize,选择器每页条数,Int,40,,ID 选择器列表每页显示的行数。,10,100,
 cf_useEnglishLabels,使用英文标签,Boolean,false,,中文标签显示为方块时开启（未安装中文字体时）。,,,

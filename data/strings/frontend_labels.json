@@ -124,7 +124,7 @@
   ],
   "commands": {
     "addcredits": {
-      "label": "加金币",
+      "label": "加星币",
       "category": "economy",
       "desc": "舰队账户增加指定数量的星币",
       "params": [

@@ -28,7 +28,7 @@ every console command gets a clickable button, so you never have to remember com
 - **热键呼出**：默认 `Ctrl + ~`（反引号），可在游戏内 Mod 设置（LunaLib）中更改。
 - **点按钮即执行**：每个按钮对应一条控制台命令，点击后立即执行，输出显示在面板底部日志区。
 - **自动收录全部命令**：从 Console Commands 的命令表读取，**任何已装 Mod 注册的命令都会自动出现在面板上**。
-- **参数可自定义并记住**：如「加金币」可自由设置数量，设置后默认沿用上次的数值，直到再次修改
+- **参数可自定义并记住**：如「加星币」可自由设置数量，设置后默认沿用上次的数值，直到再次修改
   （保存在 `saves/common/config/console_frontend_params.json.data`）。
 - **ID 选择器**：需要 ID 的参数（如「加物品」）提供「下拉选择 + 直接输入 + 搜索」三合一，
   列表**以游戏内名称为主，ID 以灰色小字作为注释保留**。
@@ -91,7 +91,7 @@ $JdkDir        = 'C:\Program Files\Java\jdk-21\bin'
 {
   "commands": {
     "addcredits": {
-      "label": "加金币",
+      "label": "加星币",
       "category": "economy",
       "desc": "舰队账户增加指定数量的星币",
       "params": [

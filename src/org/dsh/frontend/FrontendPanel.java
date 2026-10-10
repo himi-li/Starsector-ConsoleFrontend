@@ -543,6 +543,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 if (f != null) {
                     f.setText(lastFieldText.get(keepFocus) == null ? "" : lastFieldText.get(keepFocus));
                     f.showCursor();
+                    // 重建会销毁旧 TextFieldAPI，原生焦点随之丢失；不重新 grabFocus，
+                    // 玩家回车触发重建后想接着改搜索词就得再点一次输入框。
+                    try {
+                        f.grabFocus(true);
+                    } catch (Throwable ignored) {
+                    }
                 }
             } catch (Throwable ignored) {
             }
@@ -1312,7 +1318,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 }
                 // 3) 键盘事件交给原生控件与对话框。
                 //    不 consume：否则会打断原生输入、IME 组合。
+                //    注意：聚焦字段已 grabFocus，逐字符输入由原生 TextField 与
+                //    ChineseInputFix 的 IME 直接写进控件，本插件<b>不</b>再转发字符
+                //    （转发会与原生输入重复）。但面板状态不会自己更新，所以回车必须
+                //    在这里做一次收尾：把控件里的文字同步进面板，否则搜索条件永远是空的。
                 if (e.isKeyboardEvent()) {
+                    if (focusedField != null && (e.isKeyDownEvent() || e.isRepeat())) {
+                        int v = e.getEventValue();
+                        if (v == Keyboard.KEY_RETURN || v == Keyboard.KEY_NUMPADENTER) {
+                            commitFocused();
+                        }
+                    }
                     continue;
                 }
                 // 4) 滚轮：选择器打开时翻页（一格一页）；鼠标落在日志区上时也翻页；
@@ -1453,6 +1469,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     /**
      * 把按键转发给当前聚焦的输入框。
+     *
+     * <p><b>当前实现下本方法不再被 processInput 调用</b>：聚焦字段已 grabFocus，
+     * 字符输入由原生 TextField 与 IME 直接写入控件，再转发一次会导致字符重复。
+     * 回车等【收尾动作】改由 processInput 的键盘分支调用 {@link #commitFocused()}。
+     * 这里保留整段逻辑作为「自绘输入」方案的退路（若将来放弃 grabFocus）。
      *
      * @return 是否已处理该事件
      */
