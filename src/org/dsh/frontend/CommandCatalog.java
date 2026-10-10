@@ -94,8 +94,12 @@ public final class CommandCatalog {
                 e.params = cur.params;
                 e.run = cur.run;
             } else {
-                e.label = rawName;
-                e.description = firstLine(e.help);
+                // 自动枚举出来的命令（未收录中文精选）：按钮文字优先用 mod 自己的
+                // 中文描述（可读性远好于 psm_addShipXP 这类命令名）；描述里没有中文
+                // 时退回小写的命令名。字体由 FrontendPanel.button() 按是否含中文选择。
+                String desc = firstLine(e.help);
+                e.description = desc;
+                e.label = CatalogEntry.hasCjk(desc) ? buttonLabel(desc) : e.command;
                 e.category = categoryFromTags(e.tags);
                 deriveParams(e);
             }
@@ -154,6 +158,17 @@ public final class CommandCatalog {
             res.add(e);
         }
         return res;
+    }
+
+    /** 按钮文字截断上限：中文描述可能很长，而按钮宽度有限（悬浮提示里仍是全文）。 */
+    private static final int LABEL_MAX = 16;
+
+    private static String buttonLabel(String s) {
+        String t = s == null ? "" : s.trim();
+        if (t.length() > LABEL_MAX) {
+            t = t.substring(0, LABEL_MAX) + "...";
+        }
+        return t;
     }
 
     private static String firstLine(String help) {

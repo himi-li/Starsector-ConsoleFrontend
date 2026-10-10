@@ -1141,8 +1141,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         host.addUIElement(tm).inTL(x, y);
         // 按钮字体只能从 7 个 setButtonFont* 里选（没有 setButtonFont(String)）。
         // Victor14 行高 13、中文 6735 字形；更大的 orbitron20aa 行高 20 但缺 181 个汉字，
-        // 会把物品/船名显示成方块，故不采用。
-        tm.setButtonFontVictor14();
+        // 会把物品/船名显示成方块，故中文一律走 Victor14。
+        // 纯英文必须换字体：victor10/victor14/victor16 是「小型大写」字库，小写字形
+        // 就是大写形状（逐字形位图比对：victor10 26/26 相同、victor14 10/26 相同），
+        // 于是 psm_addShipXP 会显示成 PSM_ADDSHIPXP。setButtonFontDefault() =
+        // orbitron12condensed.fnt（lineHeight 16、6506 字形，26 个小写字母都是独立字形），
+        // 且不在 addButton 对 victor10/victor14 的特判分支里，是唯一可用的真小写按钮字体。
+        if (CatalogEntry.hasCjk(text)) {
+            tm.setButtonFontVictor14();
+        } else {
+            tm.setButtonFontDefault();
+        }
         ButtonAPI b = tm.addButton(text, id, Misc.getButtonTextColor(), Misc.getDarkPlayerColor(),
                 Alignment.MID, CutStyle.ALL, cw, ch, 0f);
         if (tooltip != null && !tooltip.trim().isEmpty()) {

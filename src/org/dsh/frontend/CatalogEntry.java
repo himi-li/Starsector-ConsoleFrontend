@@ -43,6 +43,37 @@ public class CatalogEntry {
         return label == null || label.isEmpty() ? displayName : label;
     }
 
+    /**
+     * 文本里是否含中日韩字符（含 CJK 标点与全角字符）。
+     *
+     * <p>两处用到：按钮字体选择（含中文必须用 Victor14，纯英文可以用真正有
+     * 小写字形的默认按钮字体）、以及自动枚举命令的按钮文字来源。
+     */
+    public static boolean hasCjk(String s) {
+        if (s == null) {
+            return false;
+        }
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c >= 0x3400 && c <= 0x4DBF) {
+                return true;
+            }
+            if (c >= 0x4E00 && c <= 0x9FFF) {
+                return true;
+            }
+            if (c >= 0xF900 && c <= 0xFAFF) {
+                return true;
+            }
+            if (c >= 0x3000 && c <= 0x303F) {
+                return true;
+            }
+            if (c >= 0xFF00 && c <= 0xFFEF) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 按钮悬浮提示：中文说明 + 语法 + 来源 Mod。 */
     public String describe() {
         StringBuilder sb = new StringBuilder();
