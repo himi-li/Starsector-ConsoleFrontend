@@ -74,6 +74,78 @@ public class CatalogEntry {
         return false;
     }
 
+    /**
+     * 省略号字符。
+     *
+     * <p>不用三个半角点：一个字库里 U+2026 只占 1 个字形宽度（等于 2 个半角单位），
+     * 而且 victor14 / victor16 / orbitron12condensed 三套 .fnt 里都有它的位图
+     * （逐 id 核对过），不会渲染成方块。
+     */
+    public static final String ELLIPSIS = "\u2026";
+
+    /** 半角单位宽度：东亚宽字符（含 CJK 与全角符号）算 2，其余算 1。 */
+    public static boolean isWide(int cp) {
+        return (cp >= 0x1100 && cp <= 0x115F)
+                || (cp >= 0x2E80 && cp <= 0x303E)
+                || (cp >= 0x3041 && cp <= 0x33FF)
+                || (cp >= 0x3400 && cp <= 0x4DBF)
+                || (cp >= 0x4E00 && cp <= 0x9FFF)
+                || (cp >= 0xA000 && cp <= 0xA4CF)
+                || (cp >= 0xAC00 && cp <= 0xD7A3)
+                || (cp >= 0xF900 && cp <= 0xFAFF)
+                || (cp >= 0xFE30 && cp <= 0xFE6F)
+                || (cp >= 0xFF00 && cp <= 0xFF60)
+                || (cp >= 0xFFE0 && cp <= 0xFFE6);
+    }
+
+    /** 文本占多少个「半角单位」（供按钮宽度换算，见 {@link #ellipsize}）。 */
+    public static int displayUnits(String s) {
+        if (s == null) {
+            return 0;
+        }
+        int n = 0;
+        for (int i = 0; i < s.length(); ) {
+            int cp = s.codePointAt(i);
+            n += isWide(cp) ? 2 : 1;
+            i += Character.charCount(cp);
+        }
+        return n;
+    }
+
+    /**
+     * 按「半角单位」预算截断，超出部分用省略号，且省略号本身也算在预算内
+     * （结果一定不超过 {@code maxUnits} 个单位）。
+     *
+     * <p>用单位而不是字符数：按钮宽度是像素，「加金币」与「addcredits」占的宽度
+     * 差一倍，只数字符会让中文按钮溢出、英文按钮留下大片空白。也不按码元切，
+     * 避免把代理对（emoji 之类）劈成半个字符。
+     */
+    public static String ellipsize(String s, int maxUnits) {
+        if (s == null) {
+            return "";
+        }
+        String t = s.trim();
+        // 至少留 1 个字符 + 省略号，否则按钮上空无一物看不出是个按钮。
+        int budgetTotal = Math.max(4, maxUnits);
+        if (displayUnits(t) <= budgetTotal) {
+            return t;
+        }
+        int budget = budgetTotal - 2; // 省略号占 2 个单位
+        StringBuilder sb = new StringBuilder();
+        int used = 0;
+        for (int i = 0; i < t.length(); ) {
+            int cp = t.codePointAt(i);
+            int w = isWide(cp) ? 2 : 1;
+            if (used + w > budget) {
+                break;
+            }
+            sb.appendCodePoint(cp);
+            used += w;
+            i += Character.charCount(cp);
+        }
+        return sb.append(ELLIPSIS).toString();
+    }
+
     /** 按钮悬浮提示：中文说明 + 语法 + 来源 Mod。 */
     public String describe() {
         StringBuilder sb = new StringBuilder();

@@ -99,7 +99,10 @@ public final class CommandCatalog {
                 // 时退回小写的命令名。字体由 FrontendPanel.button() 按是否含中文选择。
                 String desc = firstLine(e.help);
                 e.description = desc;
-                e.label = CatalogEntry.hasCjk(desc) ? buttonLabel(desc) : e.command;
+                // 两条分支都要截断：中文描述走 Victor14（每字约 12px），英文命令名走
+                // orbitron12condensed（每字约 7px），按钮宽度都有限；悬浮提示里始终是全文。
+                String raw = CatalogEntry.hasCjk(desc) ? desc : e.command;
+                e.label = CatalogEntry.ellipsize(raw, LABEL_UNITS);
                 e.category = categoryFromTags(e.tags);
                 deriveParams(e);
             }
@@ -160,16 +163,15 @@ public final class CommandCatalog {
         return res;
     }
 
-    /** 按钮文字截断上限：中文描述可能很长，而按钮宽度有限（悬浮提示里仍是全文）。 */
-    private static final int LABEL_MAX = 16;
-
-    private static String buttonLabel(String s) {
-        String t = s == null ? "" : s.trim();
-        if (t.length() > LABEL_MAX) {
-            t = t.substring(0, LABEL_MAX) + "...";
-        }
-        return t;
-    }
+    /**
+     * 按钮文字预算，单位是「半角单位」（中文/全角算 2，英文数字算 1）。
+     *
+     * <p>按单位而不是字符数：按钮宽度是固定的像素量，「加金币」与「addcredits」占的
+     * 宽度差一倍。34 个单位约合 17 个汉字或 34 个半角字符，对应按钮内可用的
+     * 约 250px（Victor14 每字约 12px、orbitron12condensed 每字约 7px，实测字体度量）。
+     * 超出的部分由 {@link CatalogEntry#ellipsize} 换成省略号，完整文字仍在悬浮提示里。
+     */
+    private static final int LABEL_UNITS = 34;
 
     private static String firstLine(String help) {
         if (help == null) {
