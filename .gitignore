@@ -25,3 +25,6 @@ _trash/
 
 # 发行包暂存目录（zip 通过 GitHub Release 分发，不进版本库）
 _release/
+
+# 本地开发档案（含本机路径与内部取舍，只作本地笔记，不进版本库、不推送 GitHub）
+docs/
