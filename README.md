@@ -50,7 +50,7 @@ every console command gets a clickable button, so you never have to remember com
 ## 安装
 
 1. 确认已安装 **Console Commands 4.0.x**（id: `lw_console`）与 **LazyLib**。
-2. 从本仓库的 **Releases** 页面下载 `ConsoleFrontend-0.1.1.zip` 并解压。
+2. 从本仓库的 **Releases** 页面下载 `ConsoleFrontend-0.2.0.zip` 并解压。
 3. 把 `ConsoleFrontend` 文件夹放入 `Starsector/mods/`。
 4. 在启动器中启用 **Console Frontend**。
 5. 进入存档后按 `Ctrl + ~` 呼出面板。
