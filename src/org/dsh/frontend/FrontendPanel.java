@@ -614,10 +614,22 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             warn("无法取得 screenPanel。" + Reflect.describePanelCandidates(state));
             return false;
         }
-        // 同样不做 instanceof 校验：脚本类加载器与 API 类加载器可能不同，
-        // 同一个接口会有两个 Class 对象，instanceof 会误判为 false。
-        // 后续全部通过接口/反射调用，不做强制类型转换。
+        // 【必须走接口直调，不能用 ReflectionUtils.invoke】
+        //
+        // 反汇编 Console Commands 的 ReflectionUtils.getMethod 发现：它按【参数类型精确相等】
+        // 匹配方法（把传入实参的运行时类做成 List，再要求方法声明的每个参数类型都在该 List 里）。
+        // 我们用 Reflect.invoke(spObj, "addComponent", parent) 时，实参 parent 的运行时类是
+        // com.starer.ui.newui.int，而 addComponent 声明的参数是 UIPanelAPI/UIComponentAPI，
+        // 类型不相等 ⇒ 方法被跳过、invoke 静默返回 null。
+        // 症状就是：面板按尺寸建好了、日志说「挂载完成」，但从未真正挂到 screenPanel 上，
+        // 因此既不显示也收不到输入 —— 正是「殖民地/市场界面里打不开」。
+        // 无参调用（如 getScreenPanel）不受影响，所以反射能取到 screenPanel。
         UIPanelAPI sp = screenPanel instanceof UIPanelAPI ? (UIPanelAPI) screenPanel : null;
+        if (sp == null) {
+            warn("screenPanel 不是 UIPanelAPI（类加载器不一致？），无法挂载: "
+                    + screenPanel.getClass().getName());
+            return false;
+        }
         Object spObj = screenPanel;
 
         // 战役中创建一个透明的提示对话框占位：
@@ -657,30 +669,24 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 warn("创建透明占位对话框失败: " + t);
             }
         }
-        Object spPos = Reflect.invoke(spObj, "getPosition");
+        PositionAPI spPos = sp.getPosition();
         float w = Global.getSettings().getScreenWidth();
         float h = Global.getSettings().getScreenHeight();
         if (spPos != null) {
-            Object pw = Reflect.invoke(spPos, "getWidth");
-            Object ph = Reflect.invoke(spPos, "getHeight");
-            if (pw instanceof Number) {
-                w = ((Number) pw).floatValue();
-            }
-            if (ph instanceof Number) {
-                h = ((Number) ph).floatValue();
-            }
+            w = spPos.getWidth();
+            h = spPos.getHeight();
         }
         lastW = w;
         lastH = h;
 
         // 父面板始终占满 screenPanel，便于居中定位；真正的内容宽度由 bgPanel 按设置决定
         parent = Global.getSettings().createCustom(w, h, null);
-        Reflect.invoke(spObj, "addComponent", parent);
+        sp.addComponent(parent);
         parent.getPosition().inTL(0f, 0f);
         // 提到最上层：占位对话框是后于我们之外挂到 screenPanel 上的，
         // 不提升层级的话面板会被它压在下面（实测表现为【只有一个空对话框 + 确定按钮】）。
         try {
-            Reflect.invoke(spObj, "bringComponentToTop", parent);
+            sp.bringComponentToTop(parent);
         } catch (Throwable ignored) {
         }
 
@@ -732,10 +738,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         // 仍在收事件的全屏面板（对话框路线不需要，宿主由游戏回收）。
         try {
             if (parent != null && !mountedInDialog) {
-                Object state = AppDriver.getInstance().getCurrentState();
-                Object spObj = Reflect.findScreenPanel(state);
-                if (spObj != null) {
-                    Reflect.invoke(spObj, "removeComponent", parent);
+                Object spObj = Reflect.findScreenPanel(AppDriver.getInstance().getCurrentState());
+                // 直调接口：ReflectionUtils.invoke 按参数类型精确匹配，传 parent（实现类）
+                // 匹配不到声明为 UIComponentAPI 的 removeComponent，会静默失败。
+                if (spObj instanceof UIPanelAPI) {
+                    ((UIPanelAPI) spObj).removeComponent(parent);
                 }
             }
         } catch (Throwable ignored) {
@@ -1975,9 +1982,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             // 自己的组件，把我们的面板压到下面。每帧把它重新提到最上层，
             // 代价只是一次列表移动（不提升层级时表现为面板被界面盖住、点击也收不到）。
             try {
-                Object sp = Reflect.findScreenPanel(AppDriver.getInstance().getCurrentState());
-                if (sp != null) {
-                    Reflect.invoke(sp, "bringComponentToTop", parent);
+                Object spObj = Reflect.findScreenPanel(AppDriver.getInstance().getCurrentState());
+                if (spObj instanceof UIPanelAPI) {
+                    ((UIPanelAPI) spObj).bringComponentToTop(parent);
                 }
             } catch (Throwable ignored) {
             }
