@@ -419,6 +419,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private boolean loggedRender;
     private boolean closed;
     private boolean mountedInDialog;
+    /** 覆盖层输入诊断计数（只打印前若干次，避免刷屏）。 */
+    private int inputDiag;
     /** 字体选择器复用 pickerSource 通道时的哨兵值（真实来源里不会出现这个字符串）。 */
     private static final String FONT_PICK_SOURCE = "__font__";
 
@@ -590,10 +592,87 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         if (parent == null || events == null) {
             return;
         }
+        boolean mouseDown = false;
+        for (InputEventAPI e : events) {
+            if (e != null && !e.isConsumed() && (e.isMouseDownEvent() || e.isLMBDownEvent())) {
+                mouseDown = true;
+                break;
+            }
+        }
+        // 先走面板树自身的派发（悬停高亮、控件内部状态等都靠它）
         try {
             parent.processInput(events);
         } catch (Throwable ignored) {
         }
+        // 兜底：树派发没消费掉的鼠标按下，由我们直接命中测试后路由。
+        //
+        // 实测覆盖层里按钮点不动、且点击会穿透到下面的殖民地界面，说明事件没有
+        // 走到按钮的 processInput。与其继续依赖游戏对子组件的遍历（层级、Fader、
+        // isActive 等任一条都可能把事件挡掉），这里自己完成命中测试：
+        // 命中按钮就回调 buttonPressed(id)，命中面板其它区域就吞掉事件。
+        if (mouseDown) {
+            for (InputEventAPI e : events) {
+                if (e == null || e.isConsumed()) {
+                    continue;
+                }
+                if (!(e.isMouseDownEvent() || e.isLMBDownEvent())) {
+                    continue;
+                }
+                ButtonAPI hit = buttonAt(e);
+                if (hit != null) {
+                    e.consume();
+                    boolean enabled = true;
+                    Object data = null;
+                    try {
+                        enabled = hit.isEnabled();
+                        data = hit.getCustomData();
+                    } catch (Throwable ignored) {
+                    }
+                    // 灰显（当前场景不可用）的按钮只吞掉点击，不触发命令
+                    if (enabled && data != null) {
+                        buttonPressed(data);
+                    }
+                    continue;
+                }
+                // 点在面板范围内的其它位置（空白 / 文本框 / 选择器）：一律吞掉，
+                // 否则会穿透到下面的市场 / 殖民地界面（实测反馈）。
+                try {
+                    if (bgPanel != null && bgPanel.getPosition() != null
+                            && bgPanel.getPosition().containsEvent(e)) {
+                        e.consume();
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            if (inputDiag < 10) {
+                inputDiag++;
+                int consumed = 0;
+                for (InputEventAPI e : events) {
+                    if (e != null && e.isConsumed()) {
+                        consumed++;
+                    }
+                }
+                info("覆盖层输入: 事件=" + events.size() + " 已消费=" + consumed);
+            }
+        }
+    }
+
+    /** 命中测试：返回该点上最上层的按钮（列表按添加顺序，取最后一个命中的）。 */
+    private ButtonAPI buttonAt(InputEventAPI e) {
+        ButtonAPI found = null;
+        for (UIComponentAPI c : interactive) {
+            if (!(c instanceof ButtonAPI)) {
+                continue;
+            }
+            try {
+                PositionAPI pos = c.getPosition();
+                if (pos != null && pos.containsEvent(e)) {
+                    found = (ButtonAPI) c;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return found;
     }
 
     /**
