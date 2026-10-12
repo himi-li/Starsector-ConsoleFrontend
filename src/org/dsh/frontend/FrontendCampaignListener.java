@@ -25,6 +25,16 @@ public class FrontendCampaignListener implements CampaignInputListener {
             if (ConsoleOverlayPanel.getInstance() != null) {
                 return;
             }
+            // 【覆盖层必须在这里接管输入】
+            // 覆盖层是手工挂到 screenPanel 上的，而市场 / 殖民地界面把自己的面板压在
+            // 我们之上；screenPanel 按「后加的先收」派发，鼠标事件会被界面先吃掉，
+            // 我们的按钮永远点不动（实测：面板能显示、完全无法点击）。
+            // processCampaignInputPreCore 比 screenPanel 的派发更早，在这里直接把事件
+            // 喂进面板树即可绕过层级问题。派发放在热键判定之前，避免热键被重复触发。
+            FrontendPanel open = FrontendPanel.getInstance();
+            if (open != null && open.isOverlayMounted()) {
+                open.dispatchInput(events);
+            }
             if (FrontendSettings.openKeybind == null || !FrontendSettings.openKeybind.isPressed(events)) {
                 return;
             }

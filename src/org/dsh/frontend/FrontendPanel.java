@@ -569,6 +569,33 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return closed;
     }
 
+    /** 覆盖层路线是否已挂载（战役监听器据此接管输入投递）。 */
+    public boolean isOverlayMounted() {
+        return parent != null && !mountedInDialog && !closed;
+    }
+
+    /**
+     * 把事件投递进面板树（覆盖层专用）。
+     *
+     * <p><b>为什么不靠游戏自己派发</b>：覆盖层是手工 {@code addComponent} 到 screenPanel 上的，
+     * 而市场 / 殖民地这类核心界面会把它们自己的面板压在最上面。事件由 screenPanel 按
+     * 「后加的先收」顺序下发给子组件，界面一旦在我们之上，鼠标事件就被它先吃掉，
+     * 我们的按钮永远收不到点击（实测：面板能显示，但完全点不动）。
+     *
+     * <p>因此改由 {@link FrontendCampaignListener} 在 {@code processInputPreCore} 阶段
+     * （比 screenPanel 的派发更早）直接把事件喂进我们的面板树：
+     * 按钮先处理并 consume，再轮到 {@link #processInput} 收尾（聚焦 / ESC / G / 滚轮）。
+     */
+    public void dispatchInput(List<InputEventAPI> events) {
+        if (parent == null || events == null) {
+            return;
+        }
+        try {
+            parent.processInput(events);
+        } catch (Throwable ignored) {
+        }
+    }
+
     /**
      * 把面板挂到游戏主界面根面板（screenPanel）上的覆盖层路线。
      *
