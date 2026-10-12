@@ -502,7 +502,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                     }
                     done = true;
                     try {
-                        FrontendDialogPlugin.openDialog();
+                        if (!FrontendDialogPlugin.openDialog()) {
+                            // showInteractionDialog 返回 false = 游戏拒绝再开一个交互对话框
+                            // （典型场景：正开着市场 / 殖民地管理界面，dialogType 已被占用）。
+                            // 这时退回「挂到 screenPanel」的覆盖层路线 —— Console Commands 自己的
+                            // 控制台面板走的就是这条路，任何战役场景都能开。
+                            FrontendPanel p = new FrontendPanel(ctx == null ? detectContext() : ctx);
+                            if (!p.mountOverlay()) {
+                                warn("覆盖层挂载失败，前端面板未能打开");
+                                p.close();
+                            }
+                        }
                     } catch (Throwable t) {
                         warnStack("打开前端面板对话框失败: " + t, t);
                     }
@@ -559,7 +569,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return closed;
     }
 
-    private void legacyMount() {
+    /**
+     * 把面板挂到游戏主界面根面板（screenPanel）上的覆盖层路线。
+     *
+     * <p><b>为什么需要它</b>：战役里最常走的是 {@code showInteractionDialog} +
+     * {@code showCustomDialog}（对话框路线），但它有硬性前提 —— 游戏同一时刻只能存在一个
+     * 交互对话框。玩家正开着市场 / 殖民地管理界面时 {@code showInteractionDialog} 直接
+     * 返回 false，对话框路线就打不开面板；那些只能在「与市场交互」时使用的命令
+     * （如 {@code fastbuild}，标签为 {@code core,cheat,market}）于是既看不到也用不了。
+     *
+     * <p>覆盖层路线没有这个限制：Console Commands 自己的 V2 控制台面板就是直接挂到
+     * screenPanel 上的，因此在任何战役界面（含市场、殖民地管理）都能打开。这里的实现在
+     * 对话框路线失败时启用，作为兜底。
+     *
+     * <p>与对话框路线的差异：{@link #mountedInDialog} 保持 false，于是
+     * {@link #renderBelow} 会自行绘制全屏暗色遮罩、{@link #resize} 与面板宽度比例设置生效。
+     *
+     * @return 是否挂载成功
+     */
+    private boolean mountOverlay() {
         if (Global.getCurrentState() == GameState.COMBAT) {
             try {
                 wasPaused = Global.getCombatEngine().isPaused();
@@ -583,8 +611,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         Object screenPanel = Reflect.findScreenPanel(state);
         if (screenPanel == null) {
             // 失败时把 state 上所有候选方法名写进日志，便于定位
-            throw new IllegalStateException("无法取得 screenPanel。"
-                    + Reflect.describePanelCandidates(state));
+            warn("无法取得 screenPanel。" + Reflect.describePanelCandidates(state));
+            return false;
         }
         // 同样不做 instanceof 校验：脚本类加载器与 API 类加载器可能不同，
         // 同一个接口会有两个 Class 对象，instanceof 会误判为 false。
@@ -663,8 +691,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             warn("构建命令目录失败: " + t);
         }
         rebuild();
-        info("面板挂载完成: screenPanel=" + spObj.getClass().getName()
+        info("面板挂载完成（覆盖层）: screenPanel=" + spObj.getClass().getName()
                 + " 尺寸=" + w + "x" + h + " 按钮=" + interactive.size());
+        return true;
     }
 
     public void close() {
@@ -696,6 +725,18 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 }
             } else if (Global.getCurrentState() == GameState.CAMPAIGN) {
                 Global.getSector().setPaused(wasPaused);
+            }
+        } catch (Throwable ignored) {
+        }
+        // 覆盖层路线：自己挂上去的组件必须自己摘掉，否则 screenPanel 上会残留一个
+        // 仍在收事件的全屏面板（对话框路线不需要，宿主由游戏回收）。
+        try {
+            if (parent != null && !mountedInDialog) {
+                Object state = AppDriver.getInstance().getCurrentState();
+                Object spObj = Reflect.findScreenPanel(state);
+                if (spObj != null) {
+                    Reflect.invoke(spObj, "removeComponent", parent);
+                }
             }
         } catch (Throwable ignored) {
         }
@@ -1599,7 +1640,13 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                             commitFocused();
                             setFocus(null);
                         }
-                        // 不 consume：交给对话框自己的按钮处理
+                        // 对话框路线【不 consume】：对话框自带的「关闭 (G)」按钮不在我们的
+                        // 控件列表里，一律吞掉会让它永远收不到点击（实测按钮无效）。
+                        // 覆盖层路线没有对话框按钮，必须 consume —— 否则点击会穿透到下面的
+                        // 市场 / 殖民地界面，变成「隔着面板点游戏」。
+                        if (!mountedInDialog) {
+                            e.consume();
+                        }
                     }
                     continue;
                 }
@@ -1923,6 +1970,16 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             if (ConsoleOverlayPanel.getInstance() != null) {
                 close();
                 return;
+            }
+            // 覆盖层路线：市场 / 殖民地界面切换标签页时会往 screenPanel 上重新添加
+            // 自己的组件，把我们的面板压到下面。每帧把它重新提到最上层，
+            // 代价只是一次列表移动（不提升层级时表现为面板被界面盖住、点击也收不到）。
+            try {
+                Object sp = Reflect.findScreenPanel(AppDriver.getInstance().getCurrentState());
+                if (sp != null) {
+                    Reflect.invoke(sp, "bringComponentToTop", parent);
+                }
+            } catch (Throwable ignored) {
             }
             // 屏幕尺寸变化（切换分辨率 / 窗口化）时重建
             float sw = Global.getSettings().getScreenWidth();
@@ -2797,6 +2854,10 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 if (t != null && t.getMarket() != null) {
                     return CommandContext.CAMPAIGN_MARKET;
                 }
+                // 注意：这里刻意【不】用 Global.getSector().getCurrentlyOpenMarket() 兜底。
+                // CAMPAIGN_MARKET 的 getMarket() 走的是「交互对话框的交互目标」，
+                // 没有对话框时它返回 null；market 命令（如 FastBuild）拿到 null 会直接 NPE，
+                // 反而不如老实地判成 CAMPAIGN_MAP、由命令自己报「只能在市场界面使用」。
                 return CommandContext.CAMPAIGN_MAP;
             }
         } catch (Throwable ignored) {

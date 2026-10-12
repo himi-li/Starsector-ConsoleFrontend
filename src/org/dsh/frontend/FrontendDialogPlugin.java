@@ -115,8 +115,9 @@ public class FrontendDialogPlugin implements InteractionDialogPlugin {
             if (ui == null) {
                 return false;
             }
-            ui.showInteractionDialog(new FrontendDialogPlugin(), null);
-            return true;
+            // 返回 false = 游戏拒绝再开一个交互对话框（同一时刻只允许一个），
+            // 调用方据此退回「挂到 screenPanel」的覆盖层路线。
+            return ui.showInteractionDialog(new FrontendDialogPlugin(), null);
         } catch (Throwable t) {
             try {
                 Global.getLogger(FrontendDialogPlugin.class).warn(
