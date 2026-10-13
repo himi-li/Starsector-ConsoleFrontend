@@ -592,88 +592,70 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         if (parent == null || events == null) {
             return;
         }
-        // 1) 先让面板自身逻辑处理（输入框聚焦、ESC、G、滚轮翻页）。
-        //    它对控件之外的鼠标按下刻意不 consume，因此不会抢走按钮的点击。
-        // FrontendPanel 自己就是面板插件，直接调本类的 processInput。
-        try {
-            processInput(events);
-        } catch (Throwable ignored) {
-        }
-
-        // 2) 鼠标事件逐个【精确路由】。
+        // 1) 鼠标事件先【精确路由】给命中的按钮。
+        //
+        // 顺序至关重要，且必须是「路由在前、processInput 在后」：
+        // processInput 在覆盖层模式下会把落在控件之外的鼠标按下 consume 掉
+        // （防穿透到下面的市场 / 殖民地界面），若先跑它，按钮的按下事件在
+        // 到达按钮之前就被消费了，本方法第 2 步的 isConsumed() 直接跳过，
+        // 按钮永远收不到鼠标 —— 表现就是「面板能开、按钮画得出、却点不动」。
         //
         // 不再依赖游戏对子组件的遍历（层级 / Fader / isActive 任一条都可能把事件挡掉），
         // 改为自己命中测试后把事件交给命中的控件。
         // 关键：按下与抬起【都要】路由 —— 游戏按钮在鼠标抬起时才判定点击，
         // 只处理按下会让按钮永远等不到 release（实测表现就是「点了没反应」）。
-        boolean touchedMouse = false;
+        int routed = 0;
+        int blocked = 0;
         for (InputEventAPI e : events) {
             if (e == null || e.isConsumed() || !e.isMouseEvent()) {
                 continue;
             }
-            touchedMouse = true;
             ButtonAPI target = buttonAt(e);
             if (target != null) {
-                // 只记录按下 / 抬起由我们自己在抬起时触发一次 buttonPressed。
-                // 刻意【不】把事件再喂给按钮自身：那会让按钮内部再走一遍
-                // actionPerformed 上抛，命令可能被执行两次。
-                e.consume();
-                trackPress(target, e);
-                continue;
-            }
-            // 非按钮（空白 / 标题 / 输入框区域）：输入框聚焦已由本类 processInput
-            // 的 fieldAt 处理，这里只吞事件，避免穿透到下面的市场 / 殖民地界面。
-            try {
-                if (bgPanel != null && bgPanel.getPosition() != null
-                        && bgPanel.getPosition().containsEvent(e)) {
-                    e.consume();
-                }
-            } catch (Throwable ignored) {
-            }
-        }
-
-        // 3) 诊断：只打前几次，输出事件类型与命中结果，便于日后定位。
-        if (touchedMouse && inputDiag < 6) {
-            inputDiag++;
-            dumpEvents(events);
-        }
-    }
-
-    /** 直接命中时按下的按钮（抬起仍在同一按钮上才算一次点击）。 */
-    private ButtonAPI pressedButton;
-
-    /**
-     * 鼠标按下的记录与抬起时的点击触发。
-     *
-     * <p>游戏按钮的点击语义是「按下 + 抬起都落在同一按钮上」，两个事件在不同帧到达，
-     * 因此需要跨帧记住按下的目标 —— 相当于把按钮的点击判定搬到覆盖层这条不依赖
-     * UI 树遍历的路径上。
-     */
-    private void trackPress(ButtonAPI b, InputEventAPI e) {
-        try {
-            if (e.isMouseDownEvent() || e.isLMBDownEvent()) {
-                pressedButton = b;
-                return;
-            }
-            if (e.isMouseUpEvent() || e.isLMBUpEvent()) {
-                ButtonAPI pressed = pressedButton;
-                pressedButton = null;
-                if (pressed == null || pressed != b) {
-                    return;
-                }
-                boolean enabled = true;
-                Object data = null;
+                // 把事件【原样喂给按钮自身】，走游戏自己的输入链路。
+                // 这条是前几版失败的根因，务必保持：
+                //   · 悬停高亮 / 按下闪光 / 点击音效全部由按钮自己的
+                //     processInputImpl 维护 —— 手工调 buttonPressed 一个都没有
+                //     （实测：改成手工触发后「鼠标移到按钮上不会高亮」）；
+                //   · 点击判定是「按下与抬起落在同一按钮上」，由按钮内部辅助对象
+                //     跨帧配对；自己配对会漏（两事件常在不同帧，面板一旦重建，
+                //     旧按钮对象就与新的不是同一个）—— 表现就是完全点不动；
+                //   · 点击最终经 buttonListener.actionPerformed 上抛到本面板插件的
+                //     buttonPressed，天然只触发一次，不会重复执行命令。
                 try {
-                    enabled = b.isEnabled();
-                    data = b.getCustomData();
+                    java.util.List<InputEventAPI> one = new java.util.ArrayList<InputEventAPI>(1);
+                    one.add(e);
+                    target.processInput(one);
                 } catch (Throwable ignored) {
                 }
-                // 灰显（当前场景不可用）的按钮只吞点击，不执行命令
-                if (enabled && data != null) {
-                    buttonPressed(data);
+                if (!e.isConsumed()) {
+                    e.consume();
                 }
+                routed++;
+                continue;
             }
+            // 非按钮：一律交给后面的 processInput 处理。
+            // 刻意【不】在这里 consume —— 输入框（搜索栏 / 参数框）也不是 ButtonAPI，
+            // 若在此处按「面板范围内就吞掉」，文本框的按下会在 processInput 之前
+            // 就被消费，fieldAt 再也聚焦不上（表现为搜索栏点不进去、打不了字）。
+            // 防穿透的 consume 由 processInput 在覆盖层模式下统一负责。
+            blocked++;
+        }
+
+        // 3) 再让面板自身逻辑处理（输入框聚焦、ESC、G、滚轮翻页）。
+        //    它是本类的插件方法，直接调用。此时按钮已经消费掉自己的事件，
+        //    面板不会误抢；未被任何按钮消费的事件才轮到这里的防穿透 consume。
+        try {
+            processInput(events);
         } catch (Throwable ignored) {
+        }
+
+        // 4) 诊断：只打前几次，输出投递结果（注意：已消费的事件不能再访问数据，
+        //    其访问器会抛「Attempt to access data of a consumed InputEvent」）。
+        if ((routed > 0 || blocked > 0) && inputDiag < 6) {
+            inputDiag++;
+            info("覆盖层投递: 命中按钮=" + routed + " 面板内拦截=" + blocked
+                    + " 事件总数=" + events.size());
         }
     }
 
@@ -693,36 +675,6 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             }
         }
         return found;
-    }
-
-    /** 覆盖层输入诊断（只在前几次调用）。 */
-    private void dumpEvents(List<InputEventAPI> events) {
-        StringBuilder sb = new StringBuilder("覆盖层输入:");
-        for (InputEventAPI e : events) {
-            if (e == null) {
-                continue;
-            }
-            ButtonAPI hit = buttonAt(e);
-            sb.append(" [x=").append(e.getX()).append(" y=").append(e.getY());
-            if (e.isMouseDownEvent() || e.isLMBDownEvent()) {
-                sb.append(" 按下");
-            }
-            if (e.isMouseUpEvent() || e.isLMBUpEvent()) {
-                sb.append(" 抬起");
-            }
-            if (e.isMouseMoveEvent()) {
-                sb.append(" 移动");
-            }
-            if (e.isMouseScrollEvent()) {
-                sb.append(" 滚轮");
-            }
-            if (e.isKeyboardEvent()) {
-                sb.append(" 键盘");
-            }
-            sb.append(" 命中按钮=").append(hit != null)
-                    .append(" 消费=").append(e.isConsumed()).append("]");
-        }
-        info(sb.toString());
     }
 
     /**
