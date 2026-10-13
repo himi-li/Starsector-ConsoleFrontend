@@ -592,72 +592,92 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         if (parent == null || events == null) {
             return;
         }
-        boolean mouseDown = false;
-        for (InputEventAPI e : events) {
-            if (e != null && !e.isConsumed() && (e.isMouseDownEvent() || e.isLMBDownEvent())) {
-                mouseDown = true;
-                break;
-            }
-        }
-        // 先走面板树自身的派发（悬停高亮、控件内部状态等都靠它）
+        // 1) 先让面板自身逻辑处理（输入框聚焦、ESC、G、滚轮翻页）。
+        //    它对控件之外的鼠标按下刻意不 consume，因此不会抢走按钮的点击。
+        // FrontendPanel 自己就是面板插件，直接调本类的 processInput。
         try {
-            parent.processInput(events);
+            processInput(events);
         } catch (Throwable ignored) {
         }
-        // 兜底：树派发没消费掉的鼠标按下，由我们直接命中测试后路由。
+
+        // 2) 鼠标事件逐个【精确路由】。
         //
-        // 实测覆盖层里按钮点不动、且点击会穿透到下面的殖民地界面，说明事件没有
-        // 走到按钮的 processInput。与其继续依赖游戏对子组件的遍历（层级、Fader、
-        // isActive 等任一条都可能把事件挡掉），这里自己完成命中测试：
-        // 命中按钮就回调 buttonPressed(id)，命中面板其它区域就吞掉事件。
-        if (mouseDown) {
-            for (InputEventAPI e : events) {
-                if (e == null || e.isConsumed()) {
-                    continue;
-                }
-                if (!(e.isMouseDownEvent() || e.isLMBDownEvent())) {
-                    continue;
-                }
-                ButtonAPI hit = buttonAt(e);
-                if (hit != null) {
+        // 不再依赖游戏对子组件的遍历（层级 / Fader / isActive 任一条都可能把事件挡掉），
+        // 改为自己命中测试后把事件交给命中的控件。
+        // 关键：按下与抬起【都要】路由 —— 游戏按钮在鼠标抬起时才判定点击，
+        // 只处理按下会让按钮永远等不到 release（实测表现就是「点了没反应」）。
+        boolean touchedMouse = false;
+        for (InputEventAPI e : events) {
+            if (e == null || e.isConsumed() || !e.isMouseEvent()) {
+                continue;
+            }
+            touchedMouse = true;
+            ButtonAPI target = buttonAt(e);
+            if (target != null) {
+                // 只记录按下 / 抬起由我们自己在抬起时触发一次 buttonPressed。
+                // 刻意【不】把事件再喂给按钮自身：那会让按钮内部再走一遍
+                // actionPerformed 上抛，命令可能被执行两次。
+                e.consume();
+                trackPress(target, e);
+                continue;
+            }
+            // 非按钮（空白 / 标题 / 输入框区域）：输入框聚焦已由本类 processInput
+            // 的 fieldAt 处理，这里只吞事件，避免穿透到下面的市场 / 殖民地界面。
+            try {
+                if (bgPanel != null && bgPanel.getPosition() != null
+                        && bgPanel.getPosition().containsEvent(e)) {
                     e.consume();
-                    boolean enabled = true;
-                    Object data = null;
-                    try {
-                        enabled = hit.isEnabled();
-                        data = hit.getCustomData();
-                    } catch (Throwable ignored) {
-                    }
-                    // 灰显（当前场景不可用）的按钮只吞掉点击，不触发命令
-                    if (enabled && data != null) {
-                        buttonPressed(data);
-                    }
-                    continue;
                 }
-                // 点在面板范围内的其它位置（空白 / 文本框 / 选择器）：一律吞掉，
-                // 否则会穿透到下面的市场 / 殖民地界面（实测反馈）。
-                try {
-                    if (bgPanel != null && bgPanel.getPosition() != null
-                            && bgPanel.getPosition().containsEvent(e)) {
-                        e.consume();
-                    }
-                } catch (Throwable ignored) {
-                }
+            } catch (Throwable ignored) {
             }
-            if (inputDiag < 10) {
-                inputDiag++;
-                int consumed = 0;
-                for (InputEventAPI e : events) {
-                    if (e != null && e.isConsumed()) {
-                        consumed++;
-                    }
-                }
-                info("覆盖层输入: 事件=" + events.size() + " 已消费=" + consumed);
-            }
+        }
+
+        // 3) 诊断：只打前几次，输出事件类型与命中结果，便于日后定位。
+        if (touchedMouse && inputDiag < 6) {
+            inputDiag++;
+            dumpEvents(events);
         }
     }
 
-    /** 命中测试：返回该点上最上层的按钮（列表按添加顺序，取最后一个命中的）。 */
+    /** 直接命中时按下的按钮（抬起仍在同一按钮上才算一次点击）。 */
+    private ButtonAPI pressedButton;
+
+    /**
+     * 鼠标按下的记录与抬起时的点击触发。
+     *
+     * <p>游戏按钮的点击语义是「按下 + 抬起都落在同一按钮上」，两个事件在不同帧到达，
+     * 因此需要跨帧记住按下的目标 —— 相当于把按钮的点击判定搬到覆盖层这条不依赖
+     * UI 树遍历的路径上。
+     */
+    private void trackPress(ButtonAPI b, InputEventAPI e) {
+        try {
+            if (e.isMouseDownEvent() || e.isLMBDownEvent()) {
+                pressedButton = b;
+                return;
+            }
+            if (e.isMouseUpEvent() || e.isLMBUpEvent()) {
+                ButtonAPI pressed = pressedButton;
+                pressedButton = null;
+                if (pressed == null || pressed != b) {
+                    return;
+                }
+                boolean enabled = true;
+                Object data = null;
+                try {
+                    enabled = b.isEnabled();
+                    data = b.getCustomData();
+                } catch (Throwable ignored) {
+                }
+                // 灰显（当前场景不可用）的按钮只吞点击，不执行命令
+                if (enabled && data != null) {
+                    buttonPressed(data);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 命中测试：返回该点上最上层的按钮（按添加顺序取最后一个命中的）。 */
     private ButtonAPI buttonAt(InputEventAPI e) {
         ButtonAPI found = null;
         for (UIComponentAPI c : interactive) {
@@ -673,6 +693,36 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             }
         }
         return found;
+    }
+
+    /** 覆盖层输入诊断（只在前几次调用）。 */
+    private void dumpEvents(List<InputEventAPI> events) {
+        StringBuilder sb = new StringBuilder("覆盖层输入:");
+        for (InputEventAPI e : events) {
+            if (e == null) {
+                continue;
+            }
+            ButtonAPI hit = buttonAt(e);
+            sb.append(" [x=").append(e.getX()).append(" y=").append(e.getY());
+            if (e.isMouseDownEvent() || e.isLMBDownEvent()) {
+                sb.append(" 按下");
+            }
+            if (e.isMouseUpEvent() || e.isLMBUpEvent()) {
+                sb.append(" 抬起");
+            }
+            if (e.isMouseMoveEvent()) {
+                sb.append(" 移动");
+            }
+            if (e.isMouseScrollEvent()) {
+                sb.append(" 滚轮");
+            }
+            if (e.isKeyboardEvent()) {
+                sb.append(" 键盘");
+            }
+            sb.append(" 命中按钮=").append(hit != null)
+                    .append(" 消费=").append(e.isConsumed()).append("]");
+        }
+        info(sb.toString());
     }
 
     /**
