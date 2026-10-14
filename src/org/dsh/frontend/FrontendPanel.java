@@ -7,9 +7,11 @@ import com.fs.starfarer.api.SettingsAPI;
 import com.fs.starfarer.api.campaign.BaseCustomUIPanelPlugin;
 import com.fs.starfarer.api.campaign.CustomDialogDelegate.CustomDialogCallback;
 import com.fs.starfarer.api.campaign.CampaignUIAPI;
+import com.fs.starfarer.api.campaign.CargoAPI;
 import com.fs.starfarer.api.campaign.InteractionDialogAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.input.InputEventAPI;
+import com.fs.starfarer.api.loading.FighterWingSpecAPI;
 import com.fs.starfarer.api.ui.Alignment;
 import com.fs.starfarer.api.ui.ButtonAPI;
 import com.fs.starfarer.api.ui.CustomPanelAPI;
@@ -25,6 +27,8 @@ import com.fs.starfarer.api.ui.UIPanelAPI;
 import com.fs.starfarer.api.util.Misc;
 import com.fs.state.AppDriver;
 import org.lazywizard.console.BaseCommand.CommandContext;
+import org.lazywizard.console.CommandUtils;
+import org.lazywizard.console.CommonStrings;
 import org.lazywizard.console.Console;
 import org.lazywizard.console.overlay.v2.panels.ConsoleOverlayPanel;
 import org.lwjgl.input.Keyboard;
@@ -423,6 +427,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private int inputDiag;
     /** 字体选择器复用 pickerSource 通道时的哨兵值（真实来源里不会出现这个字符串）。 */
     private static final String FONT_PICK_SOURCE = "__font__";
+
+    /** addwing 用法提示（与上游一致的观感）。 */
+    private static final String ADDWING_USAGE = "用法: addwing <战机id> [数量]";
 
     /** 当前正在编辑的输入框 key（不依赖原生焦点机制，见 {@link #forwardKey}）。 */
     private String focusedField;
@@ -2853,6 +2860,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     private void execute(String commandLine) {
         try {
+            // 战机改由面板侧自实现：上游 AddWing 会无条件给不以 "_wing" 结尾的 id 补后缀，
+            // 再用 0.9 阈值的模糊匹配去猜，合法 id 会被配到别的战机上（见 runAddWing）。
+            if (runAddWing(commandLine)) {
+                return;
+            }
             Console.parseInput(commandLine, context);
             if (Global.getCurrentState() == GameState.CAMPAIGN) {
                 try {
@@ -2867,6 +2879,147 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             } catch (Throwable ignored) {
             }
         }
+    }
+
+    // ================= addwing 保护 =================
+
+    /**
+     * 面板侧自实现 addwing，绕开上游 {@code AddWing} 的 id 改写与模糊匹配。
+     *
+     * <p>上游 AddWing 无条件执行「id 不以 _wing 结尾就补上 _wing」，再交给
+     * {@code CommandUtils.findBestStringMatch}（Jaro-Winkler，阈值 0.9，并列时先到者胜）。
+     * 原版 31 个战机 id 恰好全部以 _wing 结尾，该假设对原版成立；但 mod 的 id 未必如此
+     * （实测 163 个战机 id 中有 44 个不以 _wing 结尾），这些 id 会被补成不存在的名字，
+     * 再被分给某个恰好相似的战机。例：uaf_wing_m_aria → uaf_wing_m_aria_wing（不存在）
+     * → 相似度 0.9515 的 uaf_ace_wing_freesia_x 胜出。
+     *
+     * <p>面板传入的 id 已经过一轮「名称 → ID」解析，是权威值，直接按原样添加即可。
+     * 只在命令为 addwing 时接管；返回 false 表示「不是 addwing」，交回原解析链路。
+     */
+    private boolean runAddWing(String commandLine) {
+        String line = commandLine == null ? "" : commandLine.trim();
+        if (line.isEmpty()) {
+            return false;
+        }
+        String[] parts = line.split("\\s+");
+        if (!"addwing".equalsIgnoreCase(parts[0])) {
+            return false;
+        }
+        if (context == null || !context.isInCampaign()) {
+            Console.showMessage(CommonStrings.ERROR_CAMPAIGN_ONLY);
+            return true;
+        }
+        if (parts.length != 3) {
+            Console.showMessage(ADDWING_USAGE);
+            return true;
+        }
+
+        // 上游支持「数量 id」的颠倒写法，这里保持一致。
+        String idText = parts[1];
+        String amountText = parts[2];
+        if (!CommandUtils.isInteger(amountText) && CommandUtils.isInteger(idText)) {
+            idText = parts[2];
+            amountText = parts[1];
+        }
+        if (!CommandUtils.isInteger(amountText)) {
+            Console.showMessage(ADDWING_USAGE);
+            return true;
+        }
+
+        final int amount;
+        try {
+            amount = Integer.parseInt(amountText);
+        } catch (Throwable t) {
+            Console.showMessage(ADDWING_USAGE);
+            return true;
+        }
+        if (amount <= 0) {
+            return true;
+        }
+
+        String id = resolveWingId(idText);
+        if (id == null) {
+            Console.showMessage("未找到战机 id '" + idText
+                    + "'，请检查拼写（可用「加战机」按钮的选择器挑选）");
+            return true;
+        }
+
+        try {
+            CargoAPI fleet = Global.getSector().getPlayerFleet().getCargo();
+            fleet.addFighters(id, amount);
+            Console.showMessage("Added " + CommandUtils.format(amount) + " of LPC "
+                    + id + " to player fleet.");
+        } catch (Throwable t) {
+            try {
+                Console.showException("前端面板执行失败: " + commandLine, t);
+            } catch (Throwable ignored) {
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 把玩家/面板给出的战机文本解析成真实 wing id。
+     *
+     * <p>顺序：spec 直查 → 忽略大小写的精确 id → 唯一前缀 → 唯一包含。
+     * 全程只认「精确/唯一」，不做相似度猜测 —— 猜错比报错更糟。
+     *
+     * <p>不能用显示名反查：{@code getWingName()} 由 variant 的 hull 决定，同一 hull
+     * 可能对应多个 wing，重名无法区分；面板给出的值本来就已是 id。
+     */
+    private static String resolveWingId(String text) {
+        String raw = text == null ? "" : text.trim();
+        if (raw.isEmpty()) {
+            return null;
+        }
+        try {
+            if (Global.getSettings().getFighterWingSpec(raw) != null) {
+                return raw;
+            }
+        } catch (Throwable ignored) {
+        }
+        String lower = raw.toLowerCase();
+        String exact = null;
+        String prefix = null;
+        int prefixHits = 0;
+        String contains = null;
+        int containsHits = 0;
+        try {
+            for (FighterWingSpecAPI s : Global.getSettings().getAllFighterWingSpecs()) {
+                if (s == null || s.getId() == null) {
+                    continue;
+                }
+                String id = s.getId();
+                String lid = id.toLowerCase();
+                if (lid.equals(lower)) {
+                    exact = id;
+                    break;
+                }
+                if (lid.startsWith(lower)) {
+                    prefixHits++;
+                    if (prefixHits == 1) {
+                        prefix = id;
+                    }
+                }
+                if (lid.contains(lower) || lower.contains(lid)) {
+                    containsHits++;
+                    if (containsHits == 1) {
+                        contains = id;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (exact != null) {
+            return exact;
+        }
+        if (prefixHits == 1) {
+            return prefix;
+        }
+        if (prefixHits == 0 && containsHits == 1) {
+            return contains;
+        }
+        return null;
     }
 
     // ================= 工具 =================
