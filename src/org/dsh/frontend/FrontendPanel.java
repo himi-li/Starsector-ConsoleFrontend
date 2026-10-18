@@ -935,7 +935,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 buildSearchRow(w, h, margin);
                 buildCategoryRow(w, h, margin);
                 float paramsH = buildParamsArea(w, h, margin);
-                buildListArea(w, h, margin, paramsH);
+                // 参数区带说明文字后会显著变高（每条参数多占一行）。屏幕较矮时
+                // 列表区剩下的空间可能连一页都放不下，此时干脆不画列表区，
+                // 否则列表区会越过日志区叠到一起（参数多的命令尤其明显）。
+                boolean listRoom = true;
+                if (paramsH > 0f) {
+                    float listBottom = FrontendSettings.showOutputLog ? m(212f) : 40f;
+                    listRoom = h - (Y_CONTENT + paramsH) - listBottom >= 140f;
+                }
+                if (listRoom) {
+                    buildListArea(w, h, margin, paramsH);
+                }
                 buildLogArea(w, h, margin, paramsH);
             }
         } catch (Throwable t) {
@@ -1071,8 +1081,16 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         // （对应 victor14，行高 13）；victor16 行高 18，按比例再加约 5px ⇒ 46。
         // 行距不放宽的话，相邻两行的文本框会互相压字（实测过）。
         final float lineH = m(46f);
+        // 参数说明（hint）单独占一行小字：文本框实测渲染约 40 高，说明行必须落在其下方。
+        final float hintH = m(22f);
+        float hintTotal = 0f;
+        for (ParamSpec hp : e.params) {
+            if (hasHint(hp)) {
+                hintTotal += hintH;
+            }
+        }
         int lines = 1 + Math.max(1, e.params.size()) + 1;
-        float areaH = lines * lineH + m(24f);
+        float areaH = lines * lineH + hintTotal + m(24f);
 
         CustomPanelAPI box = newPanel(rowW, areaH);
         // 九宫格背景：游戏没有整块窗口素材，panel00_* 是 32x32 的九宫格切片。
@@ -1132,6 +1150,13 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             } else {
                 textField(box, ctlX, fy, ctlW, m(24f), val, key);
             }
+            if (hasHint(p)) {
+                TooltipMakerAPI ht = box.createUIElement(Math.max(80f, rowW - ctlX - 8f), hintH, false);
+                box.addUIElement(ht).inTL(ctlX, fy + m(40f));
+                ht.setParaFont(fontPath());
+                ht.addPara(escapePercent(p.hint.trim()), 3f, Misc.getGrayColor());
+                fy += hintH;
+            }
             fy += lineH;
         }
         if (e.params.isEmpty()) {
@@ -1166,6 +1191,34 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         // 返回真实占用高度供列表区下移；必须 >= areaH，
         // 否则列表区会叠到参数区上（实测：加物品参数页与按钮重叠）。
         return areaH + 12f;
+    }
+
+    /**
+     * 解析参数值：单值走 {@link IdSource#resolve}，逗号分隔的多值逐段解析后拼回。
+     * 目的：行星条件这类参数允许一次填多个（"ore_rich,rare_ore_rich"）。
+     */
+    private static String resolveMulti(List<IdOption> opts, String text) {
+        String t = text == null ? "" : text.trim();
+        if (t.isEmpty() || t.indexOf(',') < 0) {
+            return IdSource.resolve(opts, t);
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String part : t.split(",")) {
+            String seg = part == null ? "" : part.trim();
+            if (seg.isEmpty()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(',');
+            }
+            sb.append(IdSource.resolve(opts, seg));
+        }
+        return sb.length() == 0 ? t : sb.toString();
+    }
+
+    /** 该参数是否带说明文字（frontend_labels.json 的 hint）。 */
+    private static boolean hasHint(ParamSpec p) {
+        return p != null && p.hint != null && !p.hint.trim().isEmpty();
     }
 
     private void buildListArea(float w, float h, float margin, float paramsH) {
@@ -2722,7 +2775,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             boolean hasSource = p.source != null && !p.source.isEmpty();
             if (ParamSpec.TYPE_ID.equals(p.type) && hasSource && v != null && !v.trim().isEmpty()) {
                 List<IdOption> opts = idOptions(p.source);
-                String resolved = IdSource.resolve(opts, v);
+                // 允许 "id1,id2" 这种多值写法（行星条件等）：逐段解析后再拼回。
+                String resolved = resolveMulti(opts, v);
                 if (!resolved.equals(v.trim())) {
                     List<IdOption> cand = IdSource.candidates(opts, v, 4);
                     if (cand.size() > 1) {

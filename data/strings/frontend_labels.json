@@ -106,6 +106,7 @@
     "astroaddnebula",
     "astroaddring",
     "astroaddbelt",
+    "astroaddfield",
     "astroremove",
     "findship",
     "finditem",
@@ -1295,7 +1296,8 @@
           "label": "星球类型",
           "type": "id",
           "source": "planetType",
-          "default": "terran"
+          "default": "terran",
+          "hint": "决定贴图、默认名称与默认描述（terran 类地、gas_giant 气态巨行星、barren 贫瘠、frozen 冰封…）"
         },
         {
           "key": "radius",
@@ -1303,7 +1305,8 @@
           "type": "int",
           "default": 150,
           "min": 10,
-          "max": 2000
+          "max": 2000,
+          "hint": "星球自身大小，不是轨道。参考：100=卫星，150=普通行星，200=大型行星，800=恒星。星图一格=2000，半径一般用 100~200"
         },
         {
           "key": "orbitRadius",
@@ -1311,7 +1314,8 @@
           "type": "int",
           "default": 3000,
           "min": 100,
-          "max": 60000
+          "max": 60000,
+          "hint": "到轨道中心的距离。星图一格 = 2000，默认 3000 ≈ 1.5 格；类地行星常用 2500~5000"
         },
         {
           "key": "orbitDays",
@@ -1319,7 +1323,8 @@
           "type": "int",
           "default": 100,
           "min": 1,
-          "max": 100000
+          "max": 100000,
+          "hint": "绕轨道中心转一圈的天数。参考：内圈行星 60~200，外圈 200~400；留 0 会静止不动"
         },
         {
           "key": "angle",
@@ -1327,23 +1332,42 @@
           "type": "int",
           "default": 0,
           "min": 0,
-          "max": 359
+          "max": 359,
+          "hint": "在轨道上的起始位置（0~359 度）。同一轨道中心放多颗时错开角度可避免重叠"
         },
         {
           "key": "focus",
           "label": "轨道中心（留空=恒星）",
           "type": "id",
           "source": "naturalEntity",
-          "default": ""
+          "default": "",
+          "hint": "留空则以本星系恒星为中心；选一颗行星即可造卫星"
         },
         {
           "key": "name",
           "label": "名称（留空=类型名）",
           "type": "text",
-          "default": ""
+          "default": "",
+          "hint": "星图上显示的名字，留空则用所选类型的中文名"
+        },
+        {
+          "key": "desc",
+          "label": "描述（留空=类型默认）",
+          "type": "id",
+          "source": "planetDesc",
+          "default": "",
+          "hint": "行星信息面板里的介绍文字。留空则沿用该类型自带的描述"
+        },
+        {
+          "key": "conditions",
+          "label": "额外行星条件（逗号分隔）",
+          "type": "id",
+          "source": "planetCondition",
+          "default": "",
+          "hint": "留空 = 按类型自动生成（富含稀有元素、宜居等）；填 none 则不带任何条件；也可多选后手动追加"
         }
       ],
-      "run": "astroaddplanet type=%type% radius=%radius% orbitRadius=%orbitRadius% orbitDays=%orbitDays% angle=%angle% focus=%focus% name=%name%"
+      "run": "astroaddplanet type=%type% radius=%radius% orbitRadius=%orbitRadius% orbitDays=%orbitDays% angle=%angle% focus=%focus% name=%name% desc=%desc% conditions=%conditions%"
     },
     "astroaddstation": {
       "label": "加人造设施",
@@ -1355,14 +1379,16 @@
           "label": "设施类型",
           "type": "id",
           "source": "customEntity",
-          "default": "station_midline1"
+          "default": "station_midline1",
+          "hint": "station_* 是空间站，comm_relay/nav_buoy/sensor_array 是导航设施，inactive_gate 是不运转的星门"
         },
         {
           "key": "faction",
           "label": "所属派系",
           "type": "id",
           "source": "faction",
-          "default": "player"
+          "default": "player",
+          "hint": "决定设施归属与颜色；player 是玩家自建（可正常交互、接管市场）"
         },
         {
           "key": "orbitRadius",
@@ -1370,7 +1396,8 @@
           "type": "int",
           "default": 1200,
           "min": 100,
-          "max": 60000
+          "max": 60000,
+          "hint": "到轨道中心的距离。星图一格 = 2000；空间站通常贴着行星放，300~900 即可"
         },
         {
           "key": "orbitDays",
@@ -1378,7 +1405,8 @@
           "type": "int",
           "default": 60,
           "min": 1,
-          "max": 100000
+          "max": 100000,
+          "hint": "绕轨道中心转一圈的天数；30~120 看起来比较自然"
         },
         {
           "key": "angle",
@@ -1386,23 +1414,34 @@
           "type": "int",
           "default": 0,
           "min": 0,
-          "max": 359
+          "max": 359,
+          "hint": "在轨道上的起始位置（0~359 度）"
         },
         {
           "key": "focus",
           "label": "轨道中心（留空=恒星）",
           "type": "id",
           "source": "naturalEntity",
-          "default": ""
+          "default": "",
+          "hint": "留空则挂在恒星上；想给某颗行星建空间站就选那颗行星"
         },
         {
           "key": "name",
           "label": "名称（留空=默认名）",
           "type": "text",
-          "default": ""
+          "default": "",
+          "hint": "星图上显示的名字，留空则用该设施的默认中文名"
+        },
+        {
+          "key": "desc",
+          "label": "描述（留空=默认）",
+          "type": "id",
+          "source": "customDesc",
+          "default": "",
+          "hint": "交互界面里的介绍文字。留空则沿用该设施自带的描述"
         }
       ],
-      "run": "astroaddstation type=%type% faction=%faction% orbitRadius=%orbitRadius% orbitDays=%orbitDays% angle=%angle% focus=%focus% name=%name%"
+      "run": "astroaddstation type=%type% faction=%faction% orbitRadius=%orbitRadius% orbitDays=%orbitDays% angle=%angle% focus=%focus% name=%name% desc=%desc%"
     },
     "astroaddnebula": {
       "label": "加星云",
@@ -1427,7 +1466,8 @@
               "label": "琥珀星云"
             }
           ],
-          "default": "nebula"
+          "default": "nebula",
+          "hint": "三种星云贴图，视觉风格不同，效果一致"
         },
         {
           "key": "w",
@@ -1435,7 +1475,8 @@
           "type": "int",
           "default": 3,
           "min": 1,
-          "max": 8
+          "max": 8,
+          "hint": "星云由贴图块拼成，一块约 1000 单位（半格）。默认 3 块 ≈ 1.5 格宽"
         },
         {
           "key": "h",
@@ -1443,7 +1484,8 @@
           "type": "int",
           "default": 3,
           "min": 1,
-          "max": 8
+          "max": 8,
+          "hint": "一块约 1000 单位；3×3 ≈ 1.5 格见方，8×8 可铺满整个星系"
         },
         {
           "key": "orbitRadius",
@@ -1451,7 +1493,8 @@
           "type": "int",
           "default": 6000,
           "min": 100,
-          "max": 60000
+          "max": 60000,
+          "hint": "到恒星的距离。星图一格 = 2000，默认 6000 ≈ 3 格；放在外圈不挡行星"
         },
         {
           "key": "orbitDays",
@@ -1459,7 +1502,8 @@
           "type": "int",
           "default": 300,
           "min": 1,
-          "max": 100000
+          "max": 100000,
+          "hint": "绕恒星一圈的天数，大气氛用建议 200~500"
         },
         {
           "key": "angle",
@@ -1467,7 +1511,8 @@
           "type": "int",
           "default": 0,
           "min": 0,
-          "max": 359
+          "max": 359,
+          "hint": "在轨道上的起始位置（0~359 度），决定星云出现在星图的哪一侧"
         }
       ],
       "run": "astroaddnebula key=%key% w=%w% h=%h% orbitRadius=%orbitRadius% orbitDays=%orbitDays% angle=%angle%"
@@ -1499,7 +1544,8 @@
               "label": "特殊环"
             }
           ],
-          "default": "rings_dust0"
+          "default": "rings_dust0",
+          "hint": "尘埃环最淡，碎石环颗粒明显，冰晶环偏亮白，特殊环为杂色"
         },
         {
           "key": "middleRadius",
@@ -1507,7 +1553,8 @@
           "type": "int",
           "default": 900,
           "min": 20,
-          "max": 5000
+          "max": 5000,
+          "hint": "环到环绕天体的距离。要大于天体自身半径（默认行星半径 150，日冕约 300）；900 是稳妥值"
         },
         {
           "key": "bandWidth",
@@ -1515,7 +1562,8 @@
           "type": "int",
           "default": 256,
           "min": 32,
-          "max": 2048
+          "max": 2048,
+          "hint": "环的厚度（内外径之差）；256 是原版常用值，512 以上会很宽"
         },
         {
           "key": "orbitDays",
@@ -1523,14 +1571,16 @@
           "type": "int",
           "default": 60,
           "min": 1,
-          "max": 100000
+          "max": 100000,
+          "hint": "环随行星公转的天数，一般与该行星的公转天数接近"
         },
         {
           "key": "focus",
           "label": "环绕天体（留空=恒星）",
           "type": "id",
           "source": "naturalEntity",
-          "default": ""
+          "default": "",
+          "hint": "留空则环挂在恒星外圈；给行星加环请选那颗行星"
         }
       ],
       "run": "astroaddring key=%key% middleRadius=%middleRadius% bandWidth=%bandWidth% orbitDays=%orbitDays% focus=%focus%"
@@ -1546,7 +1596,8 @@
           "type": "int",
           "default": 80,
           "min": 1,
-          "max": 600
+          "max": 600,
+          "hint": "视觉密度参考：原版小行星带多为 90~100 颗，300 以上会非常拥挤"
         },
         {
           "key": "orbitRadius",
@@ -1554,7 +1605,8 @@
           "type": "int",
           "default": 5000,
           "min": 100,
-          "max": 60000
+          "max": 60000,
+          "hint": "到恒星的距离。星图一格 = 2000；原版带多在 4000~6000，默认 5000 ≈ 2.5 格"
         },
         {
           "key": "width",
@@ -1562,7 +1614,8 @@
           "type": "int",
           "default": 400,
           "min": 20,
-          "max": 5000
+          "max": 5000,
+          "hint": "带的径向厚度。原版 100~500；比轨道半径还大会铺成盘状"
         },
         {
           "key": "minDays",
@@ -1570,7 +1623,8 @@
           "type": "int",
           "default": 150,
           "min": 1,
-          "max": 100000
+          "max": 100000,
+          "hint": "带内小行星的公转周期下限；与「最长」不同会让带自身慢慢错动"
         },
         {
           "key": "maxDays",
@@ -1578,23 +1632,130 @@
           "type": "int",
           "default": 300,
           "min": 1,
-          "max": 100000
+          "max": 100000,
+          "hint": "公转周期上限，需 ≥「最短」；原版比例通常 1:2"
         },
         {
           "key": "focus",
           "label": "轨道中心（留空=恒星）",
           "type": "id",
           "source": "naturalEntity",
-          "default": ""
+          "default": "",
+          "hint": "留空即绕恒星；选行星则可做行星的碎屑环带"
         },
         {
           "key": "name",
           "label": "名称（可留空）",
           "type": "text",
-          "default": ""
+          "default": "",
+          "hint": "小行星带在星图上的名字，留空则不显示名字"
         }
       ],
       "run": "astroaddbelt count=%count% orbitRadius=%orbitRadius% width=%width% minDays=%minDays% maxDays=%maxDays% focus=%focus% name=%name%"
+    },
+    "astroaddfield": {
+      "label": "加小行星群",
+      "category": "astroNatural",
+      "desc": "在当前星系添加一片小行星群 / 残骸云（局部密集，不是环带）",
+      "params": [
+        {
+          "key": "minRadius",
+          "label": "内半径",
+          "type": "int",
+          "default": 200,
+          "min": 20,
+          "max": 5000,
+          "hint": "小行星群自身的空心内径；填 0 或与「外半径」相同即为实心团块"
+        },
+        {
+          "key": "maxRadius",
+          "label": "外半径",
+          "type": "int",
+          "default": 400,
+          "min": 20,
+          "max": 5000,
+          "hint": "小行星群的散布范围。星图一格 = 2000；原版残骸云多为 200~400"
+        },
+        {
+          "key": "minAsteroids",
+          "label": "最少小行星",
+          "type": "int",
+          "default": 20,
+          "min": 1,
+          "max": 400,
+          "hint": "实际数量在「最少~最多」之间随机；20~30 接近原版密度"
+        },
+        {
+          "key": "maxAsteroids",
+          "label": "最多小行星",
+          "type": "int",
+          "default": 30,
+          "min": 1,
+          "max": 400,
+          "hint": "上限，需 ≥「最少」；100 以上适合做大型残骸区"
+        },
+        {
+          "key": "minSize",
+          "label": "最小尺寸",
+          "type": "int",
+          "default": 4,
+          "min": 1,
+          "max": 100,
+          "hint": "单颗小行星的半径；原版常用 4~12"
+        },
+        {
+          "key": "maxSize",
+          "label": "最大尺寸",
+          "type": "int",
+          "default": 12,
+          "min": 1,
+          "max": 200,
+          "hint": "需 ≥「最小尺寸」；30 以上会出现可撞击的大石块"
+        },
+        {
+          "key": "orbitRadius",
+          "label": "轨道半径",
+          "type": "int",
+          "default": 1100,
+          "min": 100,
+          "max": 60000,
+          "hint": "到轨道中心的距离。星图一格 = 2000；原版残骸云常挂在行星外 700~1500"
+        },
+        {
+          "key": "orbitDays",
+          "label": "公转天数",
+          "type": "int",
+          "default": 70,
+          "min": 1,
+          "max": 100000,
+          "hint": "整片小行星群绕轨道中心一圈的天数"
+        },
+        {
+          "key": "angle",
+          "label": "初始角度",
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 359,
+          "hint": "在轨道上的起始位置（0~359 度）"
+        },
+        {
+          "key": "focus",
+          "label": "轨道中心（留空=恒星）",
+          "type": "id",
+          "source": "naturalEntity",
+          "default": "",
+          "hint": "留空即绕恒星；选行星可做该行星的残骸云"
+        },
+        {
+          "key": "name",
+          "label": "名称（可留空）",
+          "type": "text",
+          "default": "",
+          "hint": "星图上显示的名字，留空则不显示"
+        }
+      ],
+      "run": "astroaddfield minRadius=%minRadius% maxRadius=%maxRadius% minAsteroids=%minAsteroids% maxAsteroids=%maxAsteroids% minSize=%minSize% maxSize=%maxSize% orbitRadius=%orbitRadius% orbitDays=%orbitDays% angle=%angle% focus=%focus% name=%name%"
     },
     "astroremove": {
       "label": "删除天体 / 设施",
@@ -1607,7 +1768,8 @@
           "label": "目标实体",
           "type": "id",
           "source": "systemEntity",
-          "default": ""
+          "default": "",
+          "hint": "列出当前星系内全部天体、空间站与地形；按名称搜索后点选即可"
         }
       ],
       "run": "astroremove id=%id%"

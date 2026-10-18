@@ -21,6 +21,7 @@ import com.fs.starfarer.api.characters.OfficerDataAPI;
 import com.fs.starfarer.api.combat.ShipHullSpecAPI;
 import com.fs.starfarer.api.combat.ShipSystemSpecAPI;
 import com.fs.starfarer.api.combat.ShipVariantAPI;
+import com.fs.starfarer.api.loading.Description;
 import com.fs.starfarer.api.loading.FighterWingSpecAPI;
 import com.fs.starfarer.api.loading.HullModSpecAPI;
 import com.fs.starfarer.api.loading.IndustrySpecAPI;
@@ -71,6 +72,12 @@ public final class IdSource {
     public static final String NATURAL_ENTITY = "naturalEntity";
     /** 当前星系内的人造物（空间站、中继站、星门、轨道设施等）。 */
     public static final String ARTIFICIAL_ENTITY = "artificialEntity";
+    /** 星球描述（descriptions.csv 里 type=PLANET 的条目，用于 setDescriptionIdOverride）。 */
+    public static final String PLANET_DESC = "planetDesc";
+    /** 自定义实体描述（type=CUSTOM，用于 setCustomDescriptionId）。 */
+    public static final String CUSTOM_DESC = "customDesc";
+    /** 行星的市场条件 / 行星属性（矿石丰富、宜居、废墟等）。 */
+    public static final String PLANET_CONDITION = "planetCondition";
 
 
     /** 来源 Mod 反查表：id -> Mod 名（尽力而为，失败返回 null）。 */
@@ -84,7 +91,8 @@ public final class IdSource {
         Collections.addAll(l, COMMODITY, SPECIAL, COMMODITY_SPECIAL, WEAPON, WING, HULLMOD,
                 SHIP, VARIANT, SHIP_VARIANT, FACTION, MARKET, SYSTEM, MARKET_SYSTEM,
                 CONDITION, INDUSTRY, SUBMARKET, SHIP_SYSTEM, OFFICER, PERSONALITY,
-                PLANET_TYPE, CUSTOM_ENTITY, SYSTEM_ENTITY, NATURAL_ENTITY, ARTIFICIAL_ENTITY);
+                PLANET_TYPE, CUSTOM_ENTITY, SYSTEM_ENTITY, NATURAL_ENTITY, ARTIFICIAL_ENTITY,
+                PLANET_DESC, CUSTOM_DESC, PLANET_CONDITION);
         return l;
     }
 
@@ -117,6 +125,9 @@ public final class IdSource {
             case SYSTEM_ENTITY: return "星系内实体";
             case NATURAL_ENTITY: return "自然天体";
             case ARTIFICIAL_ENTITY: return "人造设施";
+            case PLANET_DESC: return "星球描述";
+            case CUSTOM_DESC: return "设施描述";
+            case PLANET_CONDITION: return "行星条件";
             default: return "项目";
         }
     }
@@ -188,6 +199,7 @@ public final class IdSource {
     public static void invalidate() {
         modNames = null;
         customEntityIds = null;
+        descriptionRows = null;
     }
 
     private static String note(String id) {
@@ -339,6 +351,15 @@ public final class IdSource {
                 case ARTIFICIAL_ENTITY:
                     addArtificialEntities(out, seen);
                     break;
+                case PLANET_DESC:
+                    addDescriptions("PLANET", out, seen);
+                    break;
+                case CUSTOM_DESC:
+                    addDescriptions("CUSTOM", out, seen);
+                    break;
+                case PLANET_CONDITION:
+                    addPlanetConditions(out, seen);
+                    break;
                 default:
                     break;
             }
@@ -427,6 +448,104 @@ public final class IdSource {
         Collections.sort(ids, String.CASE_INSENSITIVE_ORDER);
         customEntityIds = ids;
         return ids;
+    }
+
+    /** 描述文本（descriptions.csv）：type 为 PLANET / CUSTOM 等。 */
+    private static void addDescriptions(String type, List<IdOption> out, Set<String> seen) {
+        org.json.JSONArray rows = descriptionRows();
+        if (rows == null) {
+            return;
+        }
+        for (int i = 0; i < rows.length(); i++) {
+            org.json.JSONObject row;
+            try {
+                row = rows.optJSONObject(i);
+            } catch (Throwable ignored) {
+                continue;
+            }
+            if (row == null) {
+                continue;
+            }
+            String id = row.optString("id", "").trim();
+            String rowType = row.optString("type", "").trim();
+            if (id.isEmpty() || !rowType.equalsIgnoreCase(type)) {
+                continue;
+            }
+            add(out, seen, id, descriptionName(id, type));
+        }
+    }
+
+    /** 描述的中文摘要（取第一段，压掉换行并截断），取不到时回退 id。 */
+    private static String descriptionName(String id, String type) {
+        String text = null;
+        try {
+            Description d = Global.getSettings().getDescription(id, Description.Type.valueOf(type));
+            if (d != null) {
+                text = d.getText1FirstPara();
+                if (text == null || text.trim().isEmpty()) {
+                    text = d.getText1();
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (text == null) {
+            return id;
+        }
+        String flat = text.replace('\r', ' ').replace('\n', ' ').replace('\t', ' ').trim();
+        while (flat.contains("  ")) {
+            flat = flat.replace("  ", " ");
+        }
+        if (flat.isEmpty()) {
+            return id;
+        }
+        int max = 34;
+        if (flat.length() > max) {
+            return flat.substring(0, max) + "\u2026";
+        }
+        return flat;
+    }
+
+    private static org.json.JSONArray descriptionRows;
+
+    private static org.json.JSONArray descriptionRows() {
+        if (descriptionRows != null) {
+            return descriptionRows;
+        }
+        org.json.JSONArray rows = null;
+        try {
+            rows = Global.getSettings().getMergedSpreadsheetData("id", "data/strings/descriptions.csv");
+        } catch (Throwable t) {
+            try {
+                rows = Global.getSettings().loadCSV("data/strings/descriptions.csv");
+            } catch (Throwable t2) {
+                try {
+                    Global.getLogger(IdSource.class).warn("读取 descriptions.csv 失败: " + t2);
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+        descriptionRows = rows == null ? new org.json.JSONArray() : rows;
+        return descriptionRows;
+    }
+
+    /** 行星条件（只列行星能用的条件：矿石、宜居、废墟、大气等）。 */
+    private static void addPlanetConditions(List<IdOption> out, Set<String> seen) {
+        for (MarketConditionSpecAPI s : Global.getSettings().getAllMarketConditionSpecs()) {
+            String id = s.getId();
+            boolean planetary = false;
+            try {
+                planetary = s.isPlanetary();
+            } catch (Throwable ignored) {
+            }
+            if (!planetary) {
+                continue;
+            }
+            String name = s.getName();
+            if (name == null || name.trim().isEmpty()) {
+                name = id;
+            }
+            add(out, seen, id, name.trim());
+        }
     }
 
     /** 当前星系内的实体（行星、空间站、地形、自定义实体），供轨道中心 / 删除目标选择。 */

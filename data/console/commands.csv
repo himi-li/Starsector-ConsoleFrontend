@@ -5,4 +5,5 @@ AstroAddStation,org.dsh.frontend.AstroCommands$AddStation,"campaign,market",astr
 AstroAddNebula,org.dsh.frontend.AstroCommands$AddNebula,"campaign,market",astroaddnebula [tileKey] [w] [h] [orbitRadius] [orbitDays] [angle],在玩家所在星系添加一片星云（通过 runcode 调用 addTerrain + BaseTiledTerrain.TileParams）。
 AstroAddRing,org.dsh.frontend.AstroCommands$AddRing,"campaign,market",astroaddring [ringKey] [middleRadius] [bandWidth] [orbitDays] [focusId],在指定天体周围添加行星环（通过 runcode 调用 addRingBand）。
 AstroAddBelt,org.dsh.frontend.AstroCommands$AddBelt,"campaign,market",astroaddbelt [count] [orbitRadius] [width] [minDays] [maxDays] [focusId] [name],添加小行星带（通过 runcode 调用 addAsteroidBelt）。
+AstroAddField,org.dsh.frontend.AstroCommands$AddField,"campaign,market",astroaddfield [minRadius] [maxRadius] [minAsteroids] [maxAsteroids] [minSize] [maxSize] [orbitRadius] [orbitDays] [angle] [focusId] [name],添加小行星群 / 残骸云（通过 runcode 调用 addTerrain + AsteroidFieldParams）。
 AstroRemove,org.dsh.frontend.AstroCommands$RemoveEntity,"campaign,market",astroremove <entityId>,删除当前星系内任意实体（天体 / 空间站 / 星云 / 小行星带），通过 runcode 调用 removeEntity。

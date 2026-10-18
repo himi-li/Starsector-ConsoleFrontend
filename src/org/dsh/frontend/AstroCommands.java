@@ -228,6 +228,69 @@ public final class AstroCommands {
         return s.isEmpty() ? def : s;
     }
 
+    /**
+     * 把 `a,b,c` 形式的行星条件串拆开；跳过空项与 none。
+     */
+    static java.util.List<String> splitConditions(String s) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (s == null) {
+            return out;
+        }
+        for (String part : s.split(",")) {
+            String p = part == null ? "" : part.trim();
+            if (!p.isEmpty() && !"none".equalsIgnoreCase(p)) {
+                out.add(p);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 把条件（市场属性）的中文名或 id 统一成 id；认不出来就原样返回。
+     * 例：丰富的矿床 -> ore_rich / 宜居 -> habitable / rare_ore_rich -> rare_ore_rich
+     */
+    static String conditionId(String token) {
+        if (token == null) {
+            return "";
+        }
+        String t = token.trim();
+        if (t.isEmpty()) {
+            return "";
+        }
+        try {
+            java.util.List<com.fs.starfarer.api.characters.MarketConditionSpecAPI> all =
+                    Global.getSettings().getAllMarketConditionSpecs();
+            for (com.fs.starfarer.api.characters.MarketConditionSpecAPI s : all) {
+                if (t.equalsIgnoreCase(s.getId())) {
+                    return s.getId();
+                }
+            }
+            for (com.fs.starfarer.api.characters.MarketConditionSpecAPI s : all) {
+                if (t.equals(s.getName())) {
+                    return s.getId();
+                }
+            }
+            // 只接受「唯一包含」的模糊匹配：面板选择器已经把中文名解析成 id，
+            // 这里再无条件取第一个包含项会把拼错的条件悄悄换成别的条件。
+            String lower = t.toLowerCase();
+            String hit = null;
+            for (com.fs.starfarer.api.characters.MarketConditionSpecAPI s : all) {
+                String n = s.getName();
+                if (n != null && n.toLowerCase().contains(lower)) {
+                    if (hit != null) {
+                        return t;
+                    }
+                    hit = s.getId();
+                }
+            }
+            if (hit != null) {
+                return hit;
+            }
+        } catch (Throwable ignored) {
+        }
+        return t;
+    }
+
     static String lit(String s) {
         if (s == null) {
             return "\"\"";
@@ -313,7 +376,7 @@ public final class AstroCommands {
     public static class AddPlanet extends Astro {
         @Override
         protected String usage() {
-            return "用法: astroaddplanet type=<类型> radius=<半径> orbitRadius=<轨道半径> orbitDays=<天数> angle=<角度> focus=<轨道中心id> name=<名称>";
+            return "用法: astroaddplanet type=<类型> radius=<半径> orbitRadius=<轨道半径> orbitDays=<天数> angle=<角度> focus=<轨道中心id> name=<名称> desc=<描述id> conditions=<条件id,条件id|none>";
         }
 
         @Override
@@ -331,16 +394,41 @@ public final class AstroCommands {
             if (name.isEmpty()) {
                 name = planetTypeName(type);
             }
+            String desc = arg(a, "desc", 7, "");
+            String conditions = arg(a, "conditions", 8, "");
+            boolean autoConditions = !"none".equalsIgnoreCase(conditions);
             String id = randId("cf_p_");
-            return new StringBuilder()
-                    .append(focusCode(focus))
+            StringBuilder sb = new StringBuilder();
+            sb.append(focusCode(focus))
                     .append("com.fs.starfarer.api.campaign.PlanetAPI p = loc.addPlanet(")
                     .append(lit(id)).append(", focus, ").append(lit(name)).append(", ").append(lit(type))
                     .append(", ").append(angle).append("f, ").append(radius).append("f, ")
-                    .append(orbitRadius).append("f, ").append(orbitDays).append("f);")
-                    .append("Console.showMessage(\"已添加天体: \" + p.getName() + \" (\" + p.getId() + \")\")")
-                    .append(";")
-                    .toString();
+                    .append(orbitRadius).append("f, ").append(orbitDays).append("f);");
+            // 描述：不填时沿用 PlanetSpec 自带的 descriptionId（多数类型本来就有描述）
+            if (!desc.isEmpty()) {
+                sb.append("try { p.setDescriptionIdOverride(").append(lit(desc)).append("); }")
+                        .append(" catch (Throwable ignored) {}");
+            }
+            // 市场属性 / 行星条件：由游戏的 PlanetConditionGenerator 按类型自动生成
+            // （它同时会给星球建一个「仅条件用」的市场，行星信息面板才有条件列表可看）
+            if (autoConditions) {
+                sb.append("try { com.fs.starfarer.api.impl.campaign.procgen.PlanetConditionGenerator")
+                        .append(".generateConditionsForPlanet(p, ((com.fs.starfarer.api.campaign.StarSystemAPI) loc).getAge()); }")
+                        .append(" catch (Throwable ignored) {}")
+                        .append("try { if (p.getMarket() != null) p.getMarket().setSurveyLevel(")
+                        .append("com.fs.starfarer.api.campaign.econ.MarketAPI.SurveyLevel.FULL); }")
+                        .append(" catch (Throwable ignored) {}");
+                for (String c : splitConditions(conditions)) {
+                    sb.append("try { if (p.getMarket() != null) p.getMarket().addCondition(")
+                            .append(lit(conditionId(c))).append("); } catch (Throwable ignored) {}");
+                }
+                // 手动 addCondition 之后重算一次，条件带来的产出/危险度才会立刻生效
+                sb.append("try { if (p.getMarket() != null) p.getMarket().reapplyConditions(); }")
+                        .append(" catch (Throwable ignored) {}");
+            }
+            sb.append("Console.showMessage(\"已添加天体: \" + p.getName() + \" (\" + p.getId() + \")\")")
+                    .append(";");
+            return sb.toString();
         }
     }
 
@@ -350,7 +438,7 @@ public final class AstroCommands {
     public static class AddStation extends Astro {
         @Override
         protected String usage() {
-            return "用法: astroaddstation type=<实体类型> faction=<派系> orbitRadius=<轨道半径> orbitDays=<天数> angle=<角度> focus=<轨道中心id> name=<名称>";
+            return "用法: astroaddstation type=<实体类型> faction=<派系> orbitRadius=<轨道半径> orbitDays=<天数> angle=<角度> focus=<轨道中心id> name=<名称> desc=<描述id>";
         }
 
         @Override
@@ -371,6 +459,7 @@ public final class AstroCommands {
             if (name.isEmpty()) {
                 name = customEntityName(type);
             }
+            String desc = arg(a, "desc", 7, "");
             String id = randId("cf_s_");
             return new StringBuilder()
                     .append(focusCode(focus))
@@ -379,6 +468,9 @@ public final class AstroCommands {
                     .append(", ").append(lit(name)).append(");")
                     .append("s.setCircularOrbitPointingDown(focus, ").append(angle).append("f, ")
                     .append(orbitRadius).append("f, ").append(orbitDays).append("f);")
+                    // 描述：留空则沿用 custom_entities.json 里该类型自带的 customDescriptionId
+                    .append(desc.isEmpty() ? ""
+                            : "try { s.setCustomDescriptionId(" + lit(desc) + "); } catch (Throwable ignored) {}")
                     .append("Console.showMessage(\"已添加空间站: \" + s.getName() + \" (\" + s.getId() + \")\")")
                     .append(";")
                     .toString();
@@ -482,7 +574,54 @@ public final class AstroCommands {
     }
 
     // ------------------------------------------------------------------
-    // 6) 删除实体（天体 / 空间站 / 星云 / 小行星带）
+    // 6) 小行星群（局部密集的小行星云，不是环形小行星带）
+    // ------------------------------------------------------------------
+    public static class AddField extends Astro {
+        @Override
+        protected String usage() {
+            return "用法: astroaddfield minRadius=<内径> maxRadius=<外径> minAsteroids=<最少> maxAsteroids=<最多> minSize=<最小尺寸> maxSize=<最大尺寸> orbitRadius=<轨道半径> orbitDays=<天数> angle=<角度> focus=<轨道中心id> name=<名称>";
+        }
+
+        @Override
+        protected String buildCode(String[] a) {
+            float minRadius = fnum(arg(a, "minRadius", 0, ""), 200f);
+            float maxRadius = fnum(arg(a, "maxRadius", 1, ""), 400f);
+            if (maxRadius < minRadius) {
+                float t = minRadius;
+                minRadius = maxRadius;
+                maxRadius = t;
+            }
+            int minAsteroids = Math.max(1, Math.min(400, inum(arg(a, "minAsteroids", 2, ""), 20)));
+            int maxAsteroids = Math.max(minAsteroids, Math.min(400, inum(arg(a, "maxAsteroids", 3, ""), 30)));
+            float minSize = fnum(arg(a, "minSize", 4, ""), 4f);
+            float maxSize = fnum(arg(a, "maxSize", 5, ""), 12f);
+            if (maxSize < minSize) {
+                float t = minSize;
+                minSize = maxSize;
+                maxSize = t;
+            }
+            float orbitRadius = fnum(arg(a, "orbitRadius", 6, ""), 1100f);
+            float orbitDays = fnum(arg(a, "orbitDays", 7, ""), 70f);
+            float angle = fnum(arg(a, "angle", 8, ""), 0f);
+            String focus = arg(a, "focus", 9, "");
+            String name = arg(a, "name", 10, "");
+            String nameLit = name.isEmpty() ? "null" : lit(name);
+            return new StringBuilder()
+                    .append(focusCode(focus))
+                    .append("com.fs.starfarer.api.campaign.SectorEntityToken f = loc.addTerrain(\"asteroid_field\", ")
+                    .append("new com.fs.starfarer.api.impl.campaign.terrain.AsteroidFieldTerrainPlugin.AsteroidFieldParams(")
+                    .append(minRadius).append("f, ").append(maxRadius).append("f, ")
+                    .append(minAsteroids).append(", ").append(maxAsteroids).append(", ")
+                    .append(minSize).append("f, ").append(maxSize).append("f, ").append(nameLit).append("));")
+                    .append("f.setCircularOrbitPointingDown(focus, ").append(angle).append("f, ")
+                    .append(orbitRadius).append("f, ").append(orbitDays).append("f);")
+                    .append("Console.showMessage(\"已添加小行星群，实体 id: \" + f.getId());")
+                    .toString();
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // 7) 删除实体（天体 / 空间站 / 星云 / 小行星带）
     // ------------------------------------------------------------------
     public static class RemoveEntity extends Astro {
         @Override
