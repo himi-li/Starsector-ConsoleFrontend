@@ -1,2 +1,8 @@
 command,class,tags,syntax,help
 ConsoleFrontend,org.dsh.frontend.FrontendCommand,console,consolefrontend [open|close|reload|resetparams],"打开或关闭控制台前端按钮面板。\nopen 打开面板（默认），close 关闭，reload 重新加载标签与 ID 列表，resetparams 恢复所有命令参数的默认值。"
+AstroAddPlanet,org.dsh.frontend.AstroCommands$AddPlanet,"campaign,market",astroaddplanet <type> [radius] [orbitRadius] [orbitDays] [angle] [focusId] [name],在玩家所在星系添加一颗行星 / 恒星 / 卫星（内部通过 runcode 调用 LocationAPI.addPlanet）。
+AstroAddStation,org.dsh.frontend.AstroCommands$AddStation,"campaign,market",astroaddstation <type> [faction] [orbitRadius] [orbitDays] [angle] [focusId] [name],在玩家所在星系添加一座空间站 / 中继站 / 星门等自定义实体（通过 runcode 调用 addCustomEntity）。
+AstroAddNebula,org.dsh.frontend.AstroCommands$AddNebula,"campaign,market",astroaddnebula [tileKey] [w] [h] [orbitRadius] [orbitDays] [angle],在玩家所在星系添加一片星云（通过 runcode 调用 addTerrain + BaseTiledTerrain.TileParams）。
+AstroAddRing,org.dsh.frontend.AstroCommands$AddRing,"campaign,market",astroaddring [ringKey] [middleRadius] [bandWidth] [orbitDays] [focusId],在指定天体周围添加行星环（通过 runcode 调用 addRingBand）。
+AstroAddBelt,org.dsh.frontend.AstroCommands$AddBelt,"campaign,market",astroaddbelt [count] [orbitRadius] [width] [minDays] [maxDays] [focusId] [name],添加小行星带（通过 runcode 调用 addAsteroidBelt）。
+AstroRemove,org.dsh.frontend.AstroCommands$RemoveEntity,"campaign,market",astroremove <entityId>,删除当前星系内任意实体（天体 / 空间站 / 星云 / 小行星带），通过 runcode 调用 removeEntity。

@@ -28,6 +28,18 @@
       "name": "系统与调试",
       "order": 70
     },
+    "astroNatural": {
+      "name": "自然天体",
+      "order": 75
+    },
+    "astroArtificial": {
+      "name": "人造设施",
+      "order": 76
+    },
+    "astroEdit": {
+      "name": "删除",
+      "order": 77
+    },
     "all": {
       "name": "全部命令",
       "order": 999
@@ -89,6 +101,12 @@
     "reveal",
     "survey",
     "planetlist",
+    "astroaddplanet",
+    "astroaddstation",
+    "astroaddnebula",
+    "astroaddring",
+    "astroaddbelt",
+    "astroremove",
     "findship",
     "finditem",
     "setcommission",
@@ -1266,6 +1284,333 @@
       "label": "调试对话框",
       "category": "system",
       "run": "debugdialogs"
+    },
+    "astroaddplanet": {
+      "label": "加自然天体",
+      "category": "astroNatural",
+      "desc": "在当前星系添加行星 / 恒星 / 卫星，可指定轨道中心作为卫星",
+      "params": [
+        {
+          "key": "type",
+          "label": "星球类型",
+          "type": "id",
+          "source": "planetType",
+          "default": "terran"
+        },
+        {
+          "key": "radius",
+          "label": "半径",
+          "type": "int",
+          "default": 150,
+          "min": 10,
+          "max": 2000
+        },
+        {
+          "key": "orbitRadius",
+          "label": "轨道半径",
+          "type": "int",
+          "default": 3000,
+          "min": 100,
+          "max": 60000
+        },
+        {
+          "key": "orbitDays",
+          "label": "公转天数",
+          "type": "int",
+          "default": 100,
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "key": "angle",
+          "label": "初始角度",
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 359
+        },
+        {
+          "key": "focus",
+          "label": "轨道中心（留空=恒星）",
+          "type": "id",
+          "source": "naturalEntity",
+          "default": ""
+        },
+        {
+          "key": "name",
+          "label": "名称（留空=类型名）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "astroaddplanet type=%type% radius=%radius% orbitRadius=%orbitRadius% orbitDays=%orbitDays% angle=%angle% focus=%focus% name=%name%"
+    },
+    "astroaddstation": {
+      "label": "加人造设施",
+      "category": "astroArtificial",
+      "desc": "在当前星系添加空间站 / 中继站 / 星门 / 轨道设施等人造实体",
+      "params": [
+        {
+          "key": "type",
+          "label": "设施类型",
+          "type": "id",
+          "source": "customEntity",
+          "default": "station_midline1"
+        },
+        {
+          "key": "faction",
+          "label": "所属派系",
+          "type": "id",
+          "source": "faction",
+          "default": "player"
+        },
+        {
+          "key": "orbitRadius",
+          "label": "轨道半径",
+          "type": "int",
+          "default": 1200,
+          "min": 100,
+          "max": 60000
+        },
+        {
+          "key": "orbitDays",
+          "label": "公转天数",
+          "type": "int",
+          "default": 60,
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "key": "angle",
+          "label": "初始角度",
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 359
+        },
+        {
+          "key": "focus",
+          "label": "轨道中心（留空=恒星）",
+          "type": "id",
+          "source": "naturalEntity",
+          "default": ""
+        },
+        {
+          "key": "name",
+          "label": "名称（留空=默认名）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "astroaddstation type=%type% faction=%faction% orbitRadius=%orbitRadius% orbitDays=%orbitDays% angle=%angle% focus=%focus% name=%name%"
+    },
+    "astroaddnebula": {
+      "label": "加星云",
+      "category": "astroNatural",
+      "desc": "在当前星系添加一片星云（宽高按贴图块数计算）",
+      "params": [
+        {
+          "key": "key",
+          "label": "星云贴图",
+          "type": "enum",
+          "options": [
+            {
+              "value": "nebula",
+              "label": "紫蓝星云"
+            },
+            {
+              "value": "nebula_blue",
+              "label": "蓝星云"
+            },
+            {
+              "value": "nebula_amber",
+              "label": "琥珀星云"
+            }
+          ],
+          "default": "nebula"
+        },
+        {
+          "key": "w",
+          "label": "宽（块）",
+          "type": "int",
+          "default": 3,
+          "min": 1,
+          "max": 8
+        },
+        {
+          "key": "h",
+          "label": "高（块）",
+          "type": "int",
+          "default": 3,
+          "min": 1,
+          "max": 8
+        },
+        {
+          "key": "orbitRadius",
+          "label": "轨道半径",
+          "type": "int",
+          "default": 6000,
+          "min": 100,
+          "max": 60000
+        },
+        {
+          "key": "orbitDays",
+          "label": "公转天数",
+          "type": "int",
+          "default": 300,
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "key": "angle",
+          "label": "初始角度",
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 359
+        }
+      ],
+      "run": "astroaddnebula key=%key% w=%w% h=%h% orbitRadius=%orbitRadius% orbitDays=%orbitDays% angle=%angle%"
+    },
+    "astroaddring": {
+      "label": "加行星环",
+      "category": "astroNatural",
+      "desc": "给选定的天体套上一圈行星环",
+      "params": [
+        {
+          "key": "key",
+          "label": "环贴图",
+          "type": "enum",
+          "options": [
+            {
+              "value": "rings_dust0",
+              "label": "尘埃环"
+            },
+            {
+              "value": "rings_asteroids0",
+              "label": "碎石环"
+            },
+            {
+              "value": "rings_ice0",
+              "label": "冰晶环"
+            },
+            {
+              "value": "rings_special0",
+              "label": "特殊环"
+            }
+          ],
+          "default": "rings_dust0"
+        },
+        {
+          "key": "middleRadius",
+          "label": "环中径",
+          "type": "int",
+          "default": 900,
+          "min": 20,
+          "max": 5000
+        },
+        {
+          "key": "bandWidth",
+          "label": "环宽",
+          "type": "int",
+          "default": 256,
+          "min": 32,
+          "max": 2048
+        },
+        {
+          "key": "orbitDays",
+          "label": "公转天数",
+          "type": "int",
+          "default": 60,
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "key": "focus",
+          "label": "环绕天体（留空=恒星）",
+          "type": "id",
+          "source": "naturalEntity",
+          "default": ""
+        }
+      ],
+      "run": "astroaddring key=%key% middleRadius=%middleRadius% bandWidth=%bandWidth% orbitDays=%orbitDays% focus=%focus%"
+    },
+    "astroaddbelt": {
+      "label": "加小行星带",
+      "category": "astroNatural",
+      "desc": "在当前星系添加一条小行星带",
+      "params": [
+        {
+          "key": "count",
+          "label": "小行星数量",
+          "type": "int",
+          "default": 80,
+          "min": 1,
+          "max": 600
+        },
+        {
+          "key": "orbitRadius",
+          "label": "轨道半径",
+          "type": "int",
+          "default": 5000,
+          "min": 100,
+          "max": 60000
+        },
+        {
+          "key": "width",
+          "label": "带宽度",
+          "type": "int",
+          "default": 400,
+          "min": 20,
+          "max": 5000
+        },
+        {
+          "key": "minDays",
+          "label": "最短公转天数",
+          "type": "int",
+          "default": 150,
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "key": "maxDays",
+          "label": "最长公转天数",
+          "type": "int",
+          "default": 300,
+          "min": 1,
+          "max": 100000
+        },
+        {
+          "key": "focus",
+          "label": "轨道中心（留空=恒星）",
+          "type": "id",
+          "source": "naturalEntity",
+          "default": ""
+        },
+        {
+          "key": "name",
+          "label": "名称（可留空）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "astroaddbelt count=%count% orbitRadius=%orbitRadius% width=%width% minDays=%minDays% maxDays=%maxDays% focus=%focus% name=%name%"
+    },
+    "astroremove": {
+      "label": "删除天体 / 设施",
+      "category": "astroEdit",
+      "confirm": true,
+      "desc": "删除当前星系内的行星 / 空间站 / 星云 / 小行星带（不可撤销）",
+      "params": [
+        {
+          "key": "id",
+          "label": "目标实体",
+          "type": "id",
+          "source": "systemEntity",
+          "default": ""
+        }
+      ],
+      "run": "astroremove id=%id%"
     }
   }
 }

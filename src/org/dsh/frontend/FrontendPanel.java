@@ -2651,6 +2651,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     }
 
     private List<IdOption> idOptions(String source) {
+        // 星系内实体会随玩家加 / 删天体变化，不能缓存。
+        if (IdSource.SYSTEM_ENTITY.equals(source) || IdSource.NATURAL_ENTITY.equals(source)
+                || IdSource.ARTIFICIAL_ENTITY.equals(source)) {
+            return IdSource.build(source);
+        }
         List<IdOption> cached = idCache.get(source);
         if (cached != null) {
             return cached;

@@ -2,7 +2,15 @@ package org.dsh.frontend;
 
 import com.fs.starfarer.api.Global;
 import com.fs.starfarer.api.ModSpecAPI;
+import com.fs.starfarer.api.campaign.CampaignTerrainAPI;
+import com.fs.starfarer.api.campaign.CustomCampaignEntityAPI;
+import com.fs.starfarer.api.campaign.CustomEntitySpecAPI;
 import com.fs.starfarer.api.campaign.FactionAPI;
+import com.fs.starfarer.api.campaign.LocationAPI;
+import com.fs.starfarer.api.campaign.PlanetAPI;
+import com.fs.starfarer.api.campaign.PlanetSpecAPI;
+import com.fs.starfarer.api.campaign.SectorEntityToken;
+import com.fs.starfarer.api.campaign.StarSystemAPI;
 import com.fs.starfarer.api.campaign.SectorAPI;
 import com.fs.starfarer.api.campaign.SpecialItemSpecAPI;
 import com.fs.starfarer.api.campaign.econ.CommoditySpecAPI;
@@ -53,6 +61,17 @@ public final class IdSource {
     public static final String SHIP_SYSTEM = "shipSystem";
     public static final String OFFICER = "officer";
     public static final String PERSONALITY = "personality";
+    /** 行星类型（planets.json 类型键，用于 addplanet 的 typeId）。 */
+    public static final String PLANET_TYPE = "planetType";
+    /** 自定义实体类型（custom_entities.json 键，空间站/人造物）。 */
+    public static final String CUSTOM_ENTITY = "customEntity";
+    /** 当前星系内的实体（用于选择轨道中心 / 待删除目标）。 */
+    public static final String SYSTEM_ENTITY = "systemEntity";
+    /** 当前星系内的自然天体（行星、恒星、星云、行星环、小行星带等）。 */
+    public static final String NATURAL_ENTITY = "naturalEntity";
+    /** 当前星系内的人造物（空间站、中继站、星门、轨道设施等）。 */
+    public static final String ARTIFICIAL_ENTITY = "artificialEntity";
+
 
     /** 来源 Mod 反查表：id -> Mod 名（尽力而为，失败返回 null）。 */
     private static Map<String, String> modNames;
@@ -64,7 +83,8 @@ public final class IdSource {
         List<String> l = new ArrayList<String>();
         Collections.addAll(l, COMMODITY, SPECIAL, COMMODITY_SPECIAL, WEAPON, WING, HULLMOD,
                 SHIP, VARIANT, SHIP_VARIANT, FACTION, MARKET, SYSTEM, MARKET_SYSTEM,
-                CONDITION, INDUSTRY, SUBMARKET, SHIP_SYSTEM, OFFICER, PERSONALITY);
+                CONDITION, INDUSTRY, SUBMARKET, SHIP_SYSTEM, OFFICER, PERSONALITY,
+                PLANET_TYPE, CUSTOM_ENTITY, SYSTEM_ENTITY, NATURAL_ENTITY, ARTIFICIAL_ENTITY);
         return l;
     }
 
@@ -92,6 +112,11 @@ public final class IdSource {
             case SHIP_SYSTEM: return "舰船系统";
             case OFFICER: return "军官";
             case PERSONALITY: return "性格";
+            case PLANET_TYPE: return "星球类型";
+            case CUSTOM_ENTITY: return "实体类型";
+            case SYSTEM_ENTITY: return "星系内实体";
+            case NATURAL_ENTITY: return "自然天体";
+            case ARTIFICIAL_ENTITY: return "人造设施";
             default: return "项目";
         }
     }
@@ -117,6 +142,15 @@ public final class IdSource {
             case MARKET:
             case SYSTEM:
                 Collections.addAll(tabs, MARKET, SYSTEM);
+                break;
+            case SYSTEM_ENTITY:
+                tabs.add(SYSTEM_ENTITY);
+                break;
+            case NATURAL_ENTITY:
+                tabs.add(NATURAL_ENTITY);
+                break;
+            case ARTIFICIAL_ENTITY:
+                tabs.add(ARTIFICIAL_ENTITY);
                 break;
             default:
                 tabs.add(source);
@@ -153,6 +187,7 @@ public final class IdSource {
 
     public static void invalidate() {
         modNames = null;
+        customEntityIds = null;
     }
 
     private static String note(String id) {
@@ -289,6 +324,21 @@ public final class IdSource {
                 case PERSONALITY:
                     addPersonalities(out);
                     break;
+                case PLANET_TYPE:
+                    addPlanetTypes(out, seen);
+                    break;
+                case CUSTOM_ENTITY:
+                    addCustomEntities(out, seen);
+                    break;
+                case SYSTEM_ENTITY:
+                    addSystemEntities(out, seen);
+                    break;
+                case NATURAL_ENTITY:
+                    addNaturalEntities(out, seen);
+                    break;
+                case ARTIFICIAL_ENTITY:
+                    addArtificialEntities(out, seen);
+                    break;
                 default:
                     break;
             }
@@ -306,6 +356,230 @@ public final class IdSource {
             }
         });
         return out;
+    }
+
+    /** 星球类型：planets.json 的类型键 + 中文显示名。 */
+    private static void addPlanetTypes(List<IdOption> out, Set<String> seen) {
+        for (PlanetSpecAPI s : Global.getSettings().getAllPlanetSpecs()) {
+            String id = s.getPlanetType();
+            if (id == null || id.isEmpty()) {
+                continue;
+            }
+            String name = s.getName();
+            if (name == null || name.trim().isEmpty()) {
+                name = id;
+            }
+            add(out, seen, id, name.trim());
+        }
+    }
+
+    /** 自定义实体类型（空间站 / 人造物）：读取所有 mod 合并后的 custom_entities.json 键。 */
+    private static void addCustomEntities(List<IdOption> out, Set<String> seen) {
+        List<String> ids = customEntityIds();
+        for (String id : ids) {
+            String name = id;
+            try {
+                CustomEntitySpecAPI spec = Global.getSettings().getCustomEntitySpec(id);
+                if (spec != null) {
+                    String n = spec.getNameInText();
+                    if (n == null || n.trim().isEmpty()) {
+                        n = spec.getDefaultName();
+                    }
+                    if (n != null && !n.trim().isEmpty()) {
+                        name = n.trim();
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            add(out, seen, id, name);
+        }
+    }
+
+    private static List<String> customEntityIds;
+
+    private static List<String> customEntityIds() {
+        if (customEntityIds != null) {
+            return customEntityIds;
+        }
+        List<String> ids = new ArrayList<String>();
+        try {
+            org.json.JSONObject json = Global.getSettings().getMergedJSON("data/config/custom_entities.json");
+            if (json != null) {
+                java.util.Iterator<?> it = json.keys();
+                while (it.hasNext()) {
+                    Object k = it.next();
+                    if (k == null) {
+                        continue;
+                    }
+                    String key = String.valueOf(k);
+                    // base_ 开头的是基类模板，不是可放置的实体。
+                    if (!key.isEmpty() && !key.startsWith("base_")) {
+                        ids.add(key);
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            try {
+                Global.getLogger(IdSource.class).warn("读取 custom_entities.json 失败: " + t);
+            } catch (Throwable ignored) {
+            }
+        }
+        Collections.sort(ids, String.CASE_INSENSITIVE_ORDER);
+        customEntityIds = ids;
+        return ids;
+    }
+
+    /** 当前星系内的实体（行星、空间站、地形、自定义实体），供轨道中心 / 删除目标选择。 */
+    private static void addSystemEntities(List<IdOption> out, Set<String> seen) {
+        LocationAPI loc = null;
+        try {
+            loc = Global.getSector().getPlayerFleet().getContainingLocation();
+        } catch (Throwable ignored) {
+        }
+        if (loc == null) {
+            return;
+        }
+        for (PlanetAPI p : loc.getPlanets()) {
+            add(out, seen, p.getId(), decorate(p.getName(), "星球"));
+        }
+        for (SectorEntityToken s : loc.getOrbitalStations()) {
+            add(out, seen, s.getId(), decorate(s.getName(), "空间站"));
+        }
+        for (CustomCampaignEntityAPI s : loc.getCustomEntities()) {
+            add(out, seen, s.getId(), decorate(s.getName(), customEntityKind(s)));
+        }
+        for (CampaignTerrainAPI t : loc.getTerrainCopy()) {
+            String type = null;
+            try {
+                type = t.getType();
+            } catch (Throwable ignored) {
+            }
+            add(out, seen, t.getId(), decorate(t.getName(), type == null ? "地形" : type));
+        }
+    }
+
+    /** 当前星系内的自然天体（恒星、行星、星云、行星环、小行星带等），供「轨道中心」选择。 */
+    private static void addNaturalEntities(List<IdOption> out, Set<String> seen) {
+        LocationAPI loc = currentLocation();
+        if (loc == null) {
+            return;
+        }
+        for (PlanetAPI p : loc.getPlanets()) {
+            String kind = "星球";
+            try {
+                if (p.isStar()) {
+                    kind = "恒星";
+                } else if (p.isGasGiant()) {
+                    kind = "气态巨行星";
+                }
+            } catch (Throwable ignored) {
+            }
+            add(out, seen, p.getId(), decorate(p.getName(), kind));
+        }
+        for (CampaignTerrainAPI t : loc.getTerrainCopy()) {
+            String type = terrainType(t);
+            if (!isNaturalTerrain(type)) {
+                continue;
+            }
+            add(out, seen, t.getId(), decorate(t.getName(), terrainKindName(type)));
+        }
+    }
+
+    /** 当前星系内的人造物（空间站、中继站、星门、轨道设施等）。 */
+    private static void addArtificialEntities(List<IdOption> out, Set<String> seen) {
+        LocationAPI loc = currentLocation();
+        if (loc == null) {
+            return;
+        }
+        for (SectorEntityToken s : loc.getOrbitalStations()) {
+            add(out, seen, s.getId(), decorate(s.getName(), "空间站"));
+        }
+        for (CustomCampaignEntityAPI s : loc.getCustomEntities()) {
+            if (seen.contains(s.getId())) {
+                continue;
+            }
+            add(out, seen, s.getId(), decorate(s.getName(), customEntityKind(s)));
+        }
+    }
+
+    private static LocationAPI currentLocation() {
+        try {
+            return Global.getSector().getPlayerFleet().getContainingLocation();
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    private static String terrainType(CampaignTerrainAPI terrain) {
+        try {
+            return terrain.getType();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** 自然地形（星云、环、小行星带等）；碎片场、空间异常之类不列入。 */
+    private static boolean isNaturalTerrain(String type) {
+        if (type == null) {
+            return false;
+        }
+        String s = type.toLowerCase();
+        return s.equals("nebula") || s.equals("ring") || s.equals("asteroid_belt")
+                || s.equals("asteroid_field") || s.equals("magnetic_field")
+                || s.equals("corona") || s.equals("corona_aka_mainyu")
+                || s.equals("event_horizon") || s.equals("pulsar_beam");
+    }
+
+    private static String terrainKindName(String type) {
+        if (type == null) {
+            return "地形";
+        }
+        String s = type.toLowerCase();
+        if (s.equals("nebula")) {
+            return "星云";
+        }
+        if (s.equals("ring")) {
+            return "行星环";
+        }
+        if (s.equals("asteroid_belt")) {
+            return "小行星带";
+        }
+        if (s.equals("asteroid_field")) {
+            return "小行星区";
+        }
+        if (s.equals("magnetic_field")) {
+            return "磁场";
+        }
+        if (s.equals("corona") || s.equals("corona_aka_mainyu")) {
+            return "日冕";
+        }
+        if (s.equals("event_horizon")) {
+            return "事件视界";
+        }
+        if (s.equals("pulsar_beam")) {
+            return "脉冲星光束";
+        }
+        return type;
+    }
+
+    private static String customEntityKind(CustomCampaignEntityAPI e) {
+        String type = null;
+        try {
+            type = e.getCustomEntityType();
+        } catch (Throwable ignored) {
+        }
+        return type == null || type.isEmpty() ? "自定义实体" : type;
+    }
+
+    private static String decorate(String name, String kind) {
+        String n = name == null || name.trim().isEmpty() ? "(未命名)" : name.trim();
+        return n + " [" + kind + "]";
+    }
+
+    /** 清空懒加载缓存（reload 时调用）。 */
+    public static void invalidateAll() {
+        customEntityIds = null;
+        modNames = null;
     }
 
     private static void addCommodities(List<IdOption> out, Set<String> seen) {

@@ -91,6 +91,18 @@ $size = (Get-Item $jarPath).Length
 Ok "已生成 jars/ConsoleFrontend.jar ($size 字节)"
 
 # ---------- 4. 校验 ----------
+# 统计一行 CSV 的字段数：双引号内的逗号不计入，连续两个双引号视为转义。
+function Get-CsvFieldCount([string]$Line) {
+    $count = 1
+    $inq = $false
+    for ($i = 0; $i -lt $Line.Length; $i++) {
+        $ch = $Line[$i]
+        if ($ch -eq '"') { $inq = -not $inq }
+        elseif ($ch -eq ',' -and -not $inq) { $count++ }
+    }
+    return $count
+}
+
 if ($Verify) {
     Info '运行数据文件一致性校验...'
 
@@ -194,7 +206,7 @@ if ($Verify) {
         try { Get-Content $p -Raw -Encoding UTF8 | ConvertFrom-Json | Out-Null }
         catch { Fail "$j 不是合法 JSON: $_" }
     }
-    # 4.4 校验 CSV 列数一致
+    # 4.4 校验 CSV 列数一致（忽略被双引号包裹的逗号）
     foreach ($c in @('data\console\commands.csv', 'data\config\LunaSettings.csv')) {
         $p = Join-Path $root $c
         $lines = Get-Content $p -Encoding UTF8
@@ -202,7 +214,7 @@ if ($Verify) {
         for ($i = 1; $i -lt $lines.Count; $i++) {
             $line = $lines[$i]
             if ([string]::IsNullOrWhiteSpace($line)) { continue }
-            $count = ([regex]::Matches($line, ',')).Count + 1
+            $count = (Get-CsvFieldCount $line)
             if ($count -ne $expected) {
                 Fail "$c 第 $($i + 1) 行列数为 $count，表头为 $expected"
             }
