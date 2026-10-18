@@ -162,7 +162,20 @@ public final class FrontendLabels {
                             JSONArray opts = p.optJSONArray("options");
                             if (opts != null) {
                                 for (int k = 0; k < opts.length(); k++) {
-                                    spec.options.add(String.valueOf(opts.get(k)));
+                                    Object rawOpt = opts.get(k);
+                                    if (rawOpt instanceof JSONObject) {
+                                        // {label:"紫蓝星云", value:"nebula"}：值参与命令拼装，
+                                        // 中文名只用于界面显示（裸字符串则两者相同）。
+                                        JSONObject oo = (JSONObject) rawOpt;
+                                        String v = oo.optString("value", "");
+                                        String l = oo.optString("label", v);
+                                        spec.options.add(v);
+                                        spec.optionLabels.add(l);
+                                    } else {
+                                        String v = String.valueOf(rawOpt);
+                                        spec.options.add(v);
+                                        spec.optionLabels.add(v);
+                                    }
                                 }
                             }
                             if (spec.key != null && !spec.key.isEmpty()) {

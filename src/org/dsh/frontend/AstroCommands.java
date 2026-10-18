@@ -631,7 +631,7 @@ public final class AstroCommands {
 
         @Override
         protected String usage() {
-            return "用法: astroremove id=<实体 id>（面板里用「目标实体」选择器挑，或控制台 planetlist 查看）";
+            return "用法: astroremove id=<实体 id>（面板里用“目标实体”选择器挑，或控制台 planetlist 查看）";
         }
 
         @Override

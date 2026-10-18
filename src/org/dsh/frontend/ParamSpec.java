@@ -21,6 +21,8 @@ public class ParamSpec {
     public Double min = null;
     public Double max = null;
     public List<String> options = new ArrayList<String>();
+    /** 与 {@link #options} 一一对应的中文显示名（JSON 里写成 {label,value} 时才有）。 */
+    public List<String> optionLabels = new ArrayList<String>();
     public String primary = "name";
     public String secondary = "id";
     public boolean searchable = true;
@@ -38,6 +40,17 @@ public class ParamSpec {
 
     public String labelOrKey() {
         return label == null || label.isEmpty() ? key : label;
+    }
+
+    /** 枚举值的显示名：有中文名用中文名，否则原样返回（空串显示成「（留空）」）。 */
+    public String optionLabel(int index, String value) {
+        if (optionLabels != null && index >= 0 && index < optionLabels.size()) {
+            String s = optionLabels.get(index);
+            if (s != null && !s.isEmpty()) {
+                return s;
+            }
+        }
+        return value == null || value.isEmpty() ? "（留空）" : value;
     }
 
     public double clamp(double v) {

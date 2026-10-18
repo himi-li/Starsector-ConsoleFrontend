@@ -503,9 +503,18 @@
           "label": "模式",
           "type": "enum",
           "options": [
-            "",
-            "set",
-            "clear"
+            {
+              "label": "留空（查看当前）",
+              "value": ""
+            },
+            {
+              "label": "设为",
+              "value": "set"
+            },
+            {
+              "label": "清空",
+              "value": "clear"
+            }
           ],
           "default": ""
         }
@@ -590,10 +599,22 @@
           "label": "目标",
           "type": "enum",
           "options": [
-            "PLAYER",
-            "FLEET",
-            "ENEMY",
-            "ALL"
+            {
+              "label": "玩家舰队",
+              "value": "PLAYER"
+            },
+            {
+              "label": "当前舰队",
+              "value": "FLEET"
+            },
+            {
+              "label": "敌方",
+              "value": "ENEMY"
+            },
+            {
+              "label": "全部",
+              "value": "ALL"
+            }
           ],
           "default": "PLAYER"
         }
@@ -609,10 +630,22 @@
           "label": "目标",
           "type": "enum",
           "options": [
-            "PLAYER",
-            "FLEET",
-            "ENEMY",
-            "ALL"
+            {
+              "label": "玩家舰队",
+              "value": "PLAYER"
+            },
+            {
+              "label": "当前舰队",
+              "value": "FLEET"
+            },
+            {
+              "label": "敌方",
+              "value": "ENEMY"
+            },
+            {
+              "label": "全部",
+              "value": "ALL"
+            }
           ],
           "default": "PLAYER"
         }
@@ -628,10 +661,22 @@
           "label": "目标",
           "type": "enum",
           "options": [
-            "PLAYER",
-            "FLEET",
-            "ENEMY",
-            "ALL"
+            {
+              "label": "玩家舰队",
+              "value": "PLAYER"
+            },
+            {
+              "label": "当前舰队",
+              "value": "FLEET"
+            },
+            {
+              "label": "敌方",
+              "value": "ENEMY"
+            },
+            {
+              "label": "全部",
+              "value": "ALL"
+            }
           ],
           "default": "PLAYER"
         }
@@ -647,10 +692,22 @@
           "label": "目标",
           "type": "enum",
           "options": [
-            "PLAYER",
-            "FLEET",
-            "ENEMY",
-            "ALL"
+            {
+              "label": "玩家舰队",
+              "value": "PLAYER"
+            },
+            {
+              "label": "当前舰队",
+              "value": "FLEET"
+            },
+            {
+              "label": "敌方",
+              "value": "ENEMY"
+            },
+            {
+              "label": "全部",
+              "value": "ALL"
+            }
           ],
           "default": "PLAYER"
         }
@@ -666,10 +723,22 @@
           "label": "目标",
           "type": "enum",
           "options": [
-            "PLAYER",
-            "FLEET",
-            "ENEMY",
-            "ALL"
+            {
+              "label": "玩家舰队",
+              "value": "PLAYER"
+            },
+            {
+              "label": "当前舰队",
+              "value": "FLEET"
+            },
+            {
+              "label": "敌方",
+              "value": "ENEMY"
+            },
+            {
+              "label": "全部",
+              "value": "ALL"
+            }
           ],
           "default": "PLAYER"
         }
@@ -714,8 +783,14 @@
           "label": "获胜方",
           "type": "enum",
           "options": [
-            "player",
-            "enemy"
+            {
+              "label": "玩家获胜",
+              "value": "player"
+            },
+            {
+              "label": "敌方获胜",
+              "value": "enemy"
+            }
           ],
           "default": "player"
         }
@@ -748,9 +823,22 @@
           "label": "目标",
           "type": "enum",
           "options": [
-            "FLEET",
-            "ENEMY",
-            "ALL"
+            {
+              "label": "玩家舰队",
+              "value": "PLAYER"
+            },
+            {
+              "label": "当前舰队",
+              "value": "FLEET"
+            },
+            {
+              "label": "敌方舰队",
+              "value": "ENEMY"
+            },
+            {
+              "label": "全部",
+              "value": "ALL"
+            }
           ],
           "default": "ENEMY"
         },
@@ -759,8 +847,14 @@
           "label": "状态",
           "type": "enum",
           "options": [
-            "on",
-            "off"
+            {
+              "label": "开启",
+              "value": "on"
+            },
+            {
+              "label": "关闭",
+              "value": "off"
+            }
           ],
           "default": "off"
         }
@@ -1141,24 +1235,78 @@
           "label": "类别",
           "type": "enum",
           "options": [
-            "ships",
-            "variants",
-            "wings",
-            "weapons",
-            "items",
-            "specials",
-            "factions",
-            "bases",
-            "systems",
-            "planets",
-            "stations",
-            "markets",
-            "conditions",
-            "industries",
-            "officers",
-            "aliases",
-            "commands",
-            "mods"
+            {
+              "label": "舰船",
+              "value": "ships"
+            },
+            {
+              "label": "装配",
+              "value": "variants"
+            },
+            {
+              "label": "战机联队",
+              "value": "wings"
+            },
+            {
+              "label": "武器",
+              "value": "weapons"
+            },
+            {
+              "label": "物品",
+              "value": "items"
+            },
+            {
+              "label": "特殊物品",
+              "value": "specials"
+            },
+            {
+              "label": "派系",
+              "value": "factions"
+            },
+            {
+              "label": "基地",
+              "value": "bases"
+            },
+            {
+              "label": "星系",
+              "value": "systems"
+            },
+            {
+              "label": "行星",
+              "value": "planets"
+            },
+            {
+              "label": "空间站",
+              "value": "stations"
+            },
+            {
+              "label": "市场",
+              "value": "markets"
+            },
+            {
+              "label": "行星条件",
+              "value": "conditions"
+            },
+            {
+              "label": "产业",
+              "value": "industries"
+            },
+            {
+              "label": "军官",
+              "value": "officers"
+            },
+            {
+              "label": "别名",
+              "value": "aliases"
+            },
+            {
+              "label": "命令",
+              "value": "commands"
+            },
+            {
+              "label": "模组",
+              "value": "mods"
+            }
           ],
           "default": "ships"
         },
@@ -1212,9 +1360,18 @@
           "label": "状态（留空=切换）",
           "type": "enum",
           "options": [
-            "",
-            "on",
-            "off"
+            {
+              "label": "留空（切换）",
+              "value": ""
+            },
+            {
+              "label": "开启",
+              "value": "on"
+            },
+            {
+              "label": "关闭",
+              "value": "off"
+            }
           ],
           "default": ""
         }
@@ -1297,7 +1454,7 @@
           "type": "id",
           "source": "planetType",
           "default": "terran",
-          "hint": "决定贴图、默认名称与默认描述（terran 类地、gas_giant 气态巨行星、barren 贫瘠、frozen 冰封…）"
+          "hint": "决定贴图、默认名称和默认描述：terran 类地、gas_giant 气态巨行星、barren 贫瘠、frozen 冰封…"
         },
         {
           "key": "radius",
@@ -1306,7 +1463,7 @@
           "default": 150,
           "min": 10,
           "max": 2000,
-          "hint": "星球自身大小，不是轨道。参考：100=卫星，150=普通行星，200=大型行星，800=恒星。星图一格=2000，半径一般用 100~200"
+          "hint": "星球自身的半径（不是轨道）。参考：100=卫星，150=普通行星，200=大型行星，800=恒星。半径一般用 100~200"
         },
         {
           "key": "orbitRadius",
@@ -1315,7 +1472,7 @@
           "default": 3000,
           "min": 100,
           "max": 60000,
-          "hint": "到轨道中心的距离。星图一格 = 2000，默认 3000 ≈ 1.5 格；类地行星常用 2500~5000"
+          "hint": "星球到轨道中心的距离。星图一格 = 2000，默认 3000 约 1.5 格；类地行星常用 2500~5000"
         },
         {
           "key": "orbitDays",
@@ -1324,7 +1481,7 @@
           "default": 100,
           "min": 1,
           "max": 100000,
-          "hint": "绕轨道中心转一圈的天数。参考：内圈行星 60~200，外圈 200~400；留 0 会静止不动"
+          "hint": "绕轨道中心转一圈的天数。内圈行星 60~200，外圈 200~400；留 0 会静止不动"
         },
         {
           "key": "angle",
@@ -1333,7 +1490,7 @@
           "default": 0,
           "min": 0,
           "max": 359,
-          "hint": "在轨道上的起始位置（0~359 度）。同一轨道中心放多颗时错开角度可避免重叠"
+          "hint": "在轨道上的起始位置（0~359 度）。同一个轨道中心放多颗时，错开角度可以避免重叠"
         },
         {
           "key": "focus",
@@ -1380,7 +1537,7 @@
           "type": "id",
           "source": "customEntity",
           "default": "station_midline1",
-          "hint": "station_* 是空间站，comm_relay/nav_buoy/sensor_array 是导航设施，inactive_gate 是不运转的星门"
+          "hint": "station_* 是空间站，comm_relay / nav_buoy / sensor_array 是导航设施，inactive_gate 是不运转的星门"
         },
         {
           "key": "faction",
@@ -1388,7 +1545,7 @@
           "type": "id",
           "source": "faction",
           "default": "player",
-          "hint": "决定设施归属与颜色；player 是玩家自建（可正常交互、接管市场）"
+          "hint": "决定设施归谁、用什么颜色。player 表示玩家自建（可正常交互、可接管市场）"
         },
         {
           "key": "orbitRadius",
@@ -1397,7 +1554,7 @@
           "default": 1200,
           "min": 100,
           "max": 60000,
-          "hint": "到轨道中心的距离。星图一格 = 2000；空间站通常贴着行星放，300~900 即可"
+          "hint": "设施到轨道中心的距离。星图一格 = 2000；空间站通常贴着行星放，300~900 即可"
         },
         {
           "key": "orbitDays",
@@ -1476,7 +1633,7 @@
           "default": 3,
           "min": 1,
           "max": 8,
-          "hint": "星云由贴图块拼成，一块约 1000 单位（半格）。默认 3 块 ≈ 1.5 格宽"
+          "hint": "星云是一块块贴图拼出来的，一块约 1000 单位（星图半格）。默认 3 块，即 1.5 格宽"
         },
         {
           "key": "h",
@@ -1485,7 +1642,7 @@
           "default": 3,
           "min": 1,
           "max": 8,
-          "hint": "一块约 1000 单位；3×3 ≈ 1.5 格见方，8×8 可铺满整个星系"
+          "hint": "一块约 1000 单位；3x3 约 1.5 格见方，8x8 可铺满整个星系"
         },
         {
           "key": "orbitRadius",
@@ -1494,7 +1651,7 @@
           "default": 6000,
           "min": 100,
           "max": 60000,
-          "hint": "到恒星的距离。星图一格 = 2000，默认 6000 ≈ 3 格；放在外圈不挡行星"
+          "hint": "星云中心到恒星的距离。星图一格 = 2000，默认 6000 约 3 格；放在外圈不会挡住行星"
         },
         {
           "key": "orbitDays",
@@ -1503,7 +1660,7 @@
           "default": 300,
           "min": 1,
           "max": 100000,
-          "hint": "绕恒星一圈的天数，大气氛用建议 200~500"
+          "hint": "绕恒星转一圈的天数。星云只是装饰，取 200~500 即可，不影响任何数值"
         },
         {
           "key": "angle",
@@ -1554,7 +1711,7 @@
           "default": 900,
           "min": 20,
           "max": 5000,
-          "hint": "环到环绕天体的距离。要大于天体自身半径（默认行星半径 150，日冕约 300）；900 是稳妥值"
+          "hint": "环到行星中心的距离（环的中线半径）。必须大于天体自身半径（行星默认 150，恒星约 300）；默认 900 适合大多数行星"
         },
         {
           "key": "bandWidth",
@@ -1563,7 +1720,7 @@
           "default": 256,
           "min": 32,
           "max": 2048,
-          "hint": "环的厚度（内外径之差）；256 是原版常用值，512 以上会很宽"
+          "hint": "环的宽度（内外半径之差）。256 是原版常用值，512 以上会显得很宽"
         },
         {
           "key": "orbitDays",
@@ -1572,7 +1729,7 @@
           "default": 60,
           "min": 1,
           "max": 100000,
-          "hint": "环随行星公转的天数，一般与该行星的公转天数接近"
+          "hint": "环跟着行星绕恒星转一圈的天数，一般填成与该行星的公转天数一致"
         },
         {
           "key": "focus",
@@ -1597,7 +1754,7 @@
           "default": 80,
           "min": 1,
           "max": 600,
-          "hint": "视觉密度参考：原版小行星带多为 90~100 颗，300 以上会非常拥挤"
+          "hint": "小行星带里石块的数量。原版带多为 90~100 颗，超过 300 会显得非常拥挤"
         },
         {
           "key": "orbitRadius",
@@ -1606,7 +1763,7 @@
           "default": 5000,
           "min": 100,
           "max": 60000,
-          "hint": "到恒星的距离。星图一格 = 2000；原版带多在 4000~6000，默认 5000 ≈ 2.5 格"
+          "hint": "小行星带中心到恒星的距离。星图一格 = 2000；原版带多在 4000~6000，默认 5000 约 2.5 格"
         },
         {
           "key": "width",
@@ -1615,7 +1772,7 @@
           "default": 400,
           "min": 20,
           "max": 5000,
-          "hint": "带的径向厚度。原版 100~500；比轨道半径还大会铺成盘状"
+          "hint": "小行星带的径向厚度（内外边缘之差）。原版 100~500；填得比轨道半径还大会铺成一整张圆盘"
         },
         {
           "key": "minDays",
@@ -1624,7 +1781,7 @@
           "default": 150,
           "min": 1,
           "max": 100000,
-          "hint": "带内小行星的公转周期下限；与「最长」不同会让带自身慢慢错动"
+          "hint": "带内侧小行星绕恒星一圈的最短天数。与“最长”取不同值时，内外两侧转速不同，整条带会缓慢翻搅"
         },
         {
           "key": "maxDays",
@@ -1633,7 +1790,7 @@
           "default": 300,
           "min": 1,
           "max": 100000,
-          "hint": "公转周期上限，需 ≥「最短」；原版比例通常 1:2"
+          "hint": "带外侧小行星绕恒星一圈的最长天数，需 >= “最短”；原版最长通常是最短的 2 倍"
         },
         {
           "key": "focus",
@@ -1665,7 +1822,7 @@
           "default": 200,
           "min": 20,
           "max": 5000,
-          "hint": "小行星群自身的空心内径；填 0 或与「外半径」相同即为实心团块"
+          "hint": "小行星群中间空心部分的半径；填 0 或与“外半径”相同就是实心团块"
         },
         {
           "key": "maxRadius",
@@ -1674,7 +1831,7 @@
           "default": 400,
           "min": 20,
           "max": 5000,
-          "hint": "小行星群的散布范围。星图一格 = 2000；原版残骸云多为 200~400"
+          "hint": "小行星群的散布半径。星图一格 = 2000；原版残骸云多为 200~400"
         },
         {
           "key": "minAsteroids",
@@ -1683,7 +1840,7 @@
           "default": 20,
           "min": 1,
           "max": 400,
-          "hint": "实际数量在「最少~最多」之间随机；20~30 接近原版密度"
+          "hint": "实际数量在“最少~最多”之间随机。20~30 接近原版残骸云的密度"
         },
         {
           "key": "maxAsteroids",
@@ -1692,7 +1849,7 @@
           "default": 30,
           "min": 1,
           "max": 400,
-          "hint": "上限，需 ≥「最少」；100 以上适合做大型残骸区"
+          "hint": "数量上限，需 >= “最少”。100 以上适合做大型残骸区"
         },
         {
           "key": "minSize",
@@ -1701,7 +1858,7 @@
           "default": 4,
           "min": 1,
           "max": 100,
-          "hint": "单颗小行星的半径；原版常用 4~12"
+          "hint": "单颗小行星的半径（不是直径）。原版常用 4~12"
         },
         {
           "key": "maxSize",
@@ -1710,7 +1867,7 @@
           "default": 12,
           "min": 1,
           "max": 200,
-          "hint": "需 ≥「最小尺寸」；30 以上会出现可撞击的大石块"
+          "hint": "单颗小行星的半径上限，需 >= “最小尺寸”。30 以上会出现可撞击的大石块"
         },
         {
           "key": "orbitRadius",
@@ -1719,7 +1876,7 @@
           "default": 1100,
           "min": 100,
           "max": 60000,
-          "hint": "到轨道中心的距离。星图一格 = 2000；原版残骸云常挂在行星外 700~1500"
+          "hint": "整片小行星群中心到轨道中心的距离。星图一格 = 2000；原版残骸云常挂在行星外 700~1500"
         },
         {
           "key": "orbitDays",
@@ -1728,7 +1885,7 @@
           "default": 70,
           "min": 1,
           "max": 100000,
-          "hint": "整片小行星群绕轨道中心一圈的天数"
+          "hint": "整片小行星群绕轨道中心转一圈的天数；留 0 会静止不动"
         },
         {
           "key": "angle",

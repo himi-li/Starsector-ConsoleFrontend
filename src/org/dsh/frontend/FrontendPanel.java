@@ -423,6 +423,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private boolean loggedRender;
     private boolean closed;
     private boolean mountedInDialog;
+    /** 本次参数区布局能否与日志区共存（false 表示参数区吃掉了日志空间，rebuild 不画日志区）。 */
+    private boolean paramsFitsWithLog;
     /** 覆盖层输入诊断计数（只打印前若干次，避免刷屏）。 */
     private int inputDiag;
     /** 字体选择器复用 pickerSource 通道时的哨兵值（真实来源里不会出现这个字符串）。 */
@@ -938,15 +940,27 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 // 参数区带说明文字后会显著变高（每条参数多占一行）。屏幕较矮时
                 // 列表区剩下的空间可能连一页都放不下，此时干脆不画列表区，
                 // 否则列表区会越过日志区叠到一起（参数多的命令尤其明显）。
+                // 参数区是否给日志区留出了空间，直接采用 buildParamsArea 选列数时的结论
+                // （它已经算过 areaH 与「留日志可用高」的关系），口径统一才不会出现
+                // 「选列数时以为能保住日志、重建时又按另一个阈值把日志砍掉」。
+                boolean logRoom = paramsH <= 0f || paramsFitsWithLog;
                 boolean listRoom = true;
                 if (paramsH > 0f) {
-                    float listBottom = FrontendSettings.showOutputLog ? m(212f) : 40f;
+                    float listBottom = logRoom && FrontendSettings.showOutputLog ? m(212f) : 40f;
                     listRoom = h - (Y_CONTENT + paramsH) - listBottom >= 140f;
                 }
                 if (listRoom) {
                     buildListArea(w, h, margin, paramsH);
                 }
-                buildLogArea(w, h, margin, paramsH);
+                // 日志区固定贴底（y = h - LOG_AREA_H - 14），参数区一旦伸到它的顶边，
+                // 就会把日志正文和参数行叠在一起（用户实测截图里两者直接压字）。
+                // 参数区已经吃掉日志区的空间时，日志区直接不画：参数页上日志本就可有可无，
+                // 而叠字会让参数根本没法读。收起参数区后日志自动回来。
+                // 阈值取「列表区同样不画」的边界（140），两处口径保持一致，
+                // 避免出现「列表区没了但日志区还压着参数」的中间态。
+                if (logRoom) {
+                    buildLogArea(w, h, margin, paramsH);
+                }
             }
         } catch (Throwable t) {
             warn("重建面板失败: " + t);
@@ -1065,7 +1079,14 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return c == null ? id : c.name;
     }
 
-    /** 参数编辑区；返回其占用高度（0 表示未展开）。 */
+    /**
+     * 参数编辑区；返回其占用高度（0 表示未展开）。
+     *
+     * <p>这里的所有高度都是<b>实测</b>出来的，不是拍脑袋的常量：说明文字（hint）会按列宽
+     * 自动折行，折成两行就必须占两行高度。早先版本把 hint 高度写死成一行（22px），
+     * 结果 astroaddplanet 这类长说明折成两行后第二行直接被下一行的文本框盖住
+     * （用户实测截图：「文字换行被遮挡」）。
+     */
     private float buildParamsArea(float w, float h, float margin) {
         if (editing == null) {
             return 0f;
@@ -1075,25 +1096,71 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             editing = null;
             return 0f;
         }
-        float rowW = w - margin * 2f;
-        float y = Y_CONTENT;
-        // 行高 46：给原生文本框的实际渲染高度留余量。文本框请求 24 时实测渲染约 40
-        // （对应 victor14，行高 13）；victor16 行高 18，按比例再加约 5px ⇒ 46。
-        // 行距不放宽的话，相邻两行的文本框会互相压字（实测过）。
-        final float lineH = m(46f);
-        // 参数说明（hint）单独占一行小字：文本框实测渲染约 40 高，说明行必须落在其下方。
-        final float hintH = m(22f);
-        float hintTotal = 0f;
-        for (ParamSpec hp : e.params) {
-            if (hasHint(hp)) {
-                hintTotal += hintH;
+        final float rowW = w - margin * 2f;
+        final float y = Y_CONTENT;
+
+        // 可用高度两档：留日志 / 不留日志。日志区固定贴底（y = h - LOG_AREA_H - 14），
+        // 「留日志」时必须把它一起减掉；但参数页上日志可有可无，放不下时优先保参数。
+        // 再多留 16px：buildParamsArea 返回 areaH + 12，日志区顶边在 h - LOG_AREA_H - 14，
+        // 不留这一手时「刚好放得下」的布局仍会与日志区顶边差 2px 叠字。
+        final float availWithLog = Math.max(m(160f),
+                h - Y_CONTENT - (FrontendSettings.showOutputLog ? LOG_AREA_H + 24f : m(16f)) - m(16f));
+        final float availNoLog = Math.max(m(160f), h - Y_CONTENT - m(16f));
+
+        // 量具：只用来量文字宽度，不挂到界面上（newPanel 不会自动 addComponent）。
+        // 宽度按整行给足 —— 量具比被测文字窄的话，游戏会按窄宽度排版，
+        // 折行数被高估，参数区会白白留一大片空白。
+        final CustomPanelAPI probe = newPanel(Math.max(m(600f), rowW), m(40f));
+
+        // 逐档试 1~3 列，优先选「还能保住日志区」的列数，其次「放得下但挤掉日志」，
+        // 都不行就取最矮的那个（宁可挤，也不允许越过面板底边）。
+        // 【为什么不能写死列数】单列在 1920x1080 下必然超屏（astroaddfield 单列 858px，
+        // 可用只有 712px）；而 2560x1600 下单列就够，写死两列反而把输入框挤窄。
+        ParamLayout[] cands = new ParamLayout[4];
+        ParamLayout minLayout = null;
+        for (int c = 1; c <= 3; c++) {
+            cands[c] = layoutParams(probe, e, c, rowW);
+            if (cands[c] != null && (minLayout == null || cands[c].areaH < minLayout.areaH)) {
+                minLayout = cands[c];
             }
         }
-        int lines = 1 + Math.max(1, e.params.size()) + 1;
-        float areaH = lines * lineH + hintTotal + m(24f);
+        ParamLayout layout = null;
+        boolean keepLog = false;
+        for (int c = 1; c <= 3; c++) {
+            if (cands[c] != null && cands[c].areaH <= availWithLog) {
+                layout = cands[c];
+                keepLog = true;
+                break;
+            }
+        }
+        if (layout == null) {
+            for (int c = 1; c <= 3; c++) {
+                if (cands[c] != null && cands[c].areaH <= availNoLog) {
+                    layout = cands[c];
+                    break;
+                }
+            }
+        }
+        if (layout == null) {
+            layout = minLayout;
+        }
+        if (layout == null) {
+            return 0f;
+        }
+        // 供 rebuild 判断日志区还能不能画。
+        paramsFitsWithLog = keepLog;
+        final int cols = layout.cols;
+        final float labelW = layout.labelW;
+        final float colW = layout.colW;
+        final float colGap = layout.colGap;
+        final float areaH = layout.areaH;
+        final float[] rowH = layout.rowH;
+        final float[] hintH = layout.hintH;
+        final float ctrlH = layout.ctrlH;
+        final int[] colOf = layout.colOf;
 
         CustomPanelAPI box = newPanel(rowW, areaH);
-        // 九宫格背景：游戏没有整块窗口素材，panel00_* 是 32x32 的九宫格切片。
+        // 九宫格背景：游戏没有整块 window 素材，panel00_* 是 32x32 的九宫格切片。
         // 用 SolidBgPlugin 直接铺一层不透明底色（最稳），避免与下方列表区文字穿透。
         drawPanelBackground(box, rowW, areaH);
 
@@ -1102,16 +1169,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         tm.setParaFont(fontPath());
         tm.addPara(escapePercent("参数设置 · " + e.labelOrName()), 8f, Misc.getBrightPlayerColor());
 
-        // 右侧预留：数字参数的 -/+ 两个按钮（各 30 宽）或选择器的 v 按钮（30 宽）
-        final float rightReserve = m(78f);
-        final float labelW = m(120f);
         final float leftPad = 12f;
+        final float ctlW = Math.max(80f, colW - labelW - m(78f));
 
-        float fy = m(40f);
-        for (ParamSpec p : e.params) {
+        // 每列各自累计 y：各列参数行数与说明行数都不同，共用一个 fy 必然错位。
+        float[] colY = new float[cols];
+        for (int c = 0; c < cols; c++) {
+            colY[c] = m(40f);
+        }
+
+        for (int pi = 0; pi < e.params.size(); pi++) {
+            ParamSpec p = e.params.get(pi);
+            final int col = colOf[pi];
+            final float colX = leftPad + col * (colW + colGap);
+            final float ctlX = colX + labelW;
+            final float fy = colY[col];
+
             // 标签与控件同 y、垂直居中（文本框实际渲染更高，标签偏上会显错位）
-            TooltipMakerAPI lt = box.createUIElement(labelW, lineH, false);
-            box.addUIElement(lt).inTL(leftPad, fy);
+            TooltipMakerAPI lt = box.createUIElement(labelW, ctrlH, false);
+            box.addUIElement(lt).inTL(colX, fy);
             lt.setParaFont(fontPath());
             LabelAPI lab = lt.addPara(escapePercent(p.labelOrKey() + (p.required ? " *" : "")), 8f,
                     p.required ? Misc.getHighlightColor() : Misc.getGrayColor());
@@ -1121,9 +1197,6 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             }
 
             String key = fieldKey(e.command, p.key);
-            float ctlX = leftPad + labelW;
-            // 控件宽度 = 行宽 - 标签 - 右侧预留；不要再额外减，否则右侧会溢出到行外
-            float ctlW = Math.max(80f, rowW - ctlX - rightReserve);
             String val = valueOf(e, p);
 
             if (p.isPicker()) {
@@ -1145,29 +1218,38 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                         "pstep|" + e.command + "|" + p.key + "|inc", "增加");
             } else if (ParamSpec.TYPE_BOOL.equals(p.type)) {
                 boolean on = isOn(val);
-                button(box, ctlX, fy, m(120f), m(24f), on ? "开 (ON)" : "关 (OFF)",
+                // 列变窄时 120 宽的开/关按钮会顶出列外，按列宽收一下。
+                button(box, ctlX, fy, Math.min(m(120f), ctlW), m(24f), on ? "开 (ON)" : "关 (OFF)",
                         "pbool|" + e.command + "|" + p.key, "点击切换");
             } else {
                 textField(box, ctlX, fy, ctlW, m(24f), val, key);
             }
-            if (hasHint(p)) {
-                TooltipMakerAPI ht = box.createUIElement(Math.max(80f, rowW - ctlX - 8f), hintH, false);
+
+            if (hintH[pi] > 0f) {
+                // 说明文字：高度取【实测折行高度】，不再固定一行 —— 否则折成两行时
+                // 第二行会被下一个参数的文本框盖住（用户实测「文字换行被遮挡」）。
+                TooltipMakerAPI ht = box.createUIElement(ctlW, hintH[pi], false);
                 box.addUIElement(ht).inTL(ctlX, fy + m(40f));
                 ht.setParaFont(fontPath());
                 ht.addPara(escapePercent(p.hint.trim()), 3f, Misc.getGrayColor());
-                fy += hintH;
             }
-            fy += lineH;
-        }
-        if (e.params.isEmpty()) {
-            TooltipMakerAPI nt = box.createUIElement(rowW - 24f, lineH, false);
-            box.addUIElement(nt).inTL(leftPad, fy);
-            nt.setParaFont(fontPath());
-            nt.addPara("该命令没有参数，点击主按钮直接执行。", 6f, Misc.getGrayColor());
-            fy += lineH;
+            colY[col] = fy + rowH[pi];
         }
 
-        // 底部行：三个按钮靠右固定，预览文本占据左侧剩余宽度
+        if (e.params.isEmpty()) {
+            TooltipMakerAPI nt = box.createUIElement(rowW - 24f, ctrlH, false);
+            box.addUIElement(nt).inTL(leftPad, m(40f));
+            nt.setParaFont(fontPath());
+            nt.addPara("该命令没有参数，点击主按钮直接执行。", 6f, Misc.getGrayColor());
+        }
+
+        // 底部行：三个按钮靠右固定，预览文本占据左侧剩余宽度。
+        // 必须压在【最高的一列】之下，否则会与右列最后一个参数叠字。
+        float bottomY = m(40f);
+        for (int c = 0; c < cols; c++) {
+            bottomY = Math.max(bottomY, colY[c]);
+        }
+        bottomY += m(8f);
         float btnW1 = m(90f);
         float btnW2 = m(100f);
         float btnW3 = m(90f);
@@ -1176,21 +1258,126 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         float pvX = leftPad;
         float pvW = Math.max(80f, rowW - pvX - btnsTotal - 16f);
 
-        TooltipMakerAPI pv = box.createUIElement(pvW, lineH, false);
-        box.addUIElement(pv).inTL(pvX, fy);
+        TooltipMakerAPI pv = box.createUIElement(pvW, ctrlH, false);
+        box.addUIElement(pv).inTL(pvX, bottomY);
         previewLabel = pv.addPara(escapePercent(previewText(e)), 6f, Misc.getHighlightColor());
 
         float bx = rowW - btnsTotal - 8f;
-        button(box, bx, fy, btnW1, m(24f), "执行", "run|" + e.command, "用当前参数执行一次");
+        button(box, bx, bottomY, btnW1, m(24f), "执行", "run|" + e.command, "用当前参数执行一次");
         bx += btnW1 + gapB;
-        button(box, bx, fy, btnW2, m(24f), "恢复默认", "reset|" + e.command, "清除该命令已记住的参数");
+        button(box, bx, bottomY, btnW2, m(24f), "恢复默认", "reset|" + e.command, "清除该命令已记住的参数");
         bx += btnW2 + gapB;
-        button(box, bx, fy, btnW3, m(24f), "收起", "editclose", null);
+        button(box, bx, bottomY, btnW3, m(24f), "收起", "editclose", null);
 
         place(box, margin, y);
         // 返回真实占用高度供列表区下移；必须 >= areaH，
         // 否则列表区会叠到参数区上（实测：加物品参数页与按钮重叠）。
         return areaH + 12f;
+    }
+
+    /** 一种列数下的实测布局结果。 */
+    private static final class ParamLayout {
+        int cols;
+        float labelW;
+        float colW;
+        float colGap;
+        float ctrlH;
+        float areaH;
+        float[] rowH;
+        float[] hintH;
+        int[] colOf;
+    }
+
+    /**
+     * 试算「按 {@code cols} 列排」需要多高。
+     *
+     * <p>关键是<b>实测说明文字的折行高度</b>：用 {@link TooltipMakerAPI#computeStringWidth}
+     * 量出整段说明的像素宽，除以可用宽度得到行数，再乘行高。固定按一行算会导致
+     * 长说明折成两行时压到下一行（用户实测「文字换行被遮挡」）。
+     */
+    private ParamLayout layoutParams(CustomPanelAPI probe, CatalogEntry e, int cols, float rowW) {
+        int n = e.params.size();
+        if (n == 0) {
+            n = 1;
+        }
+        ParamLayout L = new ParamLayout();
+        L.cols = cols;
+        L.labelW = cols == 1 ? m(120f) : m(92f);
+        L.colGap = m(24f);
+        L.colW = (rowW - 12f - L.colGap * (cols - 1)) / cols;
+        float ctlW = Math.max(80f, L.colW - L.labelW - m(78f));
+        L.ctrlH = m(46f);
+
+        // 说明文字用的行高（比正文小一号）：addPara(..., 3f, ...) 的实际渲染行高。
+        float hintLineH = activeLineHeight + 2f;
+
+        L.rowH = new float[e.params.size()];
+        L.hintH = new float[e.params.size()];
+        L.colOf = new int[e.params.size()];
+        int perCol = Math.max(1, (e.params.size() + cols - 1) / cols);
+        for (int i = 0; i < e.params.size(); i++) {
+            ParamSpec p = e.params.get(i);
+            L.colOf[i] = Math.min(cols - 1, i / perCol);
+            float hh = 0f;
+            if (hasHint(p)) {
+                hh = measureHintHeight(probe, p.hint.trim(), ctlW, hintLineH);
+            }
+            L.hintH[i] = hh;
+            L.rowH[i] = L.ctrlH + hh;
+        }
+
+        // 每列总高取该列所有参数行高之和。
+        float[] colTotal = new float[cols];
+        for (int i = 0; i < e.params.size(); i++) {
+            colTotal[L.colOf[i]] += L.rowH[i];
+        }
+        float maxCol = 0f;
+        for (int c = 0; c < cols; c++) {
+            maxCol = Math.max(maxCol, colTotal[c]);
+        }
+        // 顶部标题 40 + 各列内容 + 底部按钮行 24 + 上下留白
+        L.areaH = m(40f) + maxCol + m(8f) + m(24f) + m(16f);
+        return L;
+    }
+
+    /**
+     * 量一段说明文字在 {@code width} 宽度下实际要占多高。
+     *
+     * <p>优先用 {@link TooltipMakerAPI#getHeightSoFar()}：它返回的内容高度是游戏自己
+     * 排版算出来的，折行、行距全都不用猜。只有在它给不出数（0 或异常）时才退回
+     * 「单行像素宽 ÷ 可用宽 = 行数」的估算，并额外补一行保险 —— 说明文字被下一行
+     * 盖住（用户实测「文字换行被遮挡」）的代价远大于多留几像素空白。
+     */
+    private float measureHintHeight(CustomPanelAPI probe, String text, float width, float hintLineH) {
+        final float usableW = Math.max(40f, width - 8f);
+        // 1) 首选：让游戏自己排版，直接读高度。
+        try {
+            TooltipMakerAPI mt = probe.createUIElement(usableW, m(400f), false);
+            mt.setParaFont(fontPath());
+            mt.addPara(escapePercent(text), 3f, Misc.getGrayColor());
+            float h = mt.getHeightSoFar();
+            if (h > 0f && h < m(400f)) {
+                return h + m(2f);
+            }
+        } catch (Throwable ignored) {
+        }
+        // 2) 退回：按像素宽估算行数（量未转义的原文，'%' 被转义成 '%%' 会虚增宽度）。
+        try {
+            TooltipMakerAPI mt = probe.createUIElement(usableW, m(40f), false);
+            mt.setParaFont(fontPath());
+            float textW = mt.computeStringWidth(text);
+            if (textW > 0f) {
+                int lines = Math.max(1, (int) Math.ceil(textW / usableW));
+                // 折行时行尾常留空隙，理论行数可能少算一行，补一行保险。
+                if (lines > 1) {
+                    lines++;
+                }
+                return lines * hintLineH + m(4f);
+            }
+        } catch (Throwable ignored) {
+        }
+        // 3) 都量不出来：按两行给（比按一行安全）。
+        return 2f * hintLineH + m(4f);
     }
 
     /**
@@ -1968,6 +2155,37 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     }
 
     /** 把某个字段的新值同步到面板状态。 */
+    /**
+     * 枚举参数被直接打字时，把中文名还原成原始值。
+     *
+     * <p>枚举框里显示的是「紫蓝星云」，玩家可能手工改成「蓝星云」；草稿里必须存
+     * {@code nebula_blue}，否则命令行会带上中文名。改成了不认识的内容则原样保留
+     * （命令本身可能接受额外取值，不该替玩家吞掉）。
+     */
+    private String normalizeEnumInput(String command, String paramKey, String value) {
+        CatalogEntry e = catalog.byCommand(command);
+        if (e == null || value == null) {
+            return value;
+        }
+        for (ParamSpec p : e.params) {
+            if (!p.key.equals(paramKey) || !ParamSpec.TYPE_ENUM.equals(p.type)) {
+                continue;
+            }
+            String t = value.trim();
+            for (int i = 0; i < p.options.size(); i++) {
+                String raw = p.options.get(i);
+                if (raw == null) {
+                    continue;
+                }
+                if (raw.equalsIgnoreCase(t) || p.optionLabel(i, raw).equalsIgnoreCase(t)) {
+                    return raw;
+                }
+            }
+            return value;
+        }
+        return value;
+    }
+
     private void applyFieldValue(String key, String value) {
         if ("search".equals(key)) {
             query = value == null ? "" : value;
@@ -1980,7 +2198,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         } else {
             int bar = key.indexOf('|');
             if (bar > 0) {
-                draft.put(key, value == null ? "" : value);
+                // 枚举框里显示的是中文名，存进草稿前先换回原始值（认不出的原样保留）。
+                String v = normalizeEnumInput(key.substring(0, bar), key.substring(bar + 1), value);
+                draft.put(key, v == null ? "" : v);
                 updatePreview(key.substring(0, bar));
             }
         }
@@ -2449,12 +2669,33 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         return command + "|" + key;
     }
 
-    private String valueOf(CatalogEntry e, ParamSpec p) {
+    /** 草稿里的原始值（写进命令行的那一份）。 */
+    private String rawValueOf(CatalogEntry e, ParamSpec p) {
         String d = draft.get(fieldKey(e.command, p.key));
         if (d != null) {
             return d;
         }
         return ParamStore.get(e.command, p.key, p.defaultValue == null ? "" : p.defaultValue);
+    }
+
+    /**
+     * 界面上显示的值。
+     *
+     * <p>枚举参数显示中文名（「紫蓝星云」而不是「nebula」）—— 玩家不该为了用面板
+     * 去记一串内部 ID。命令行拼装走 {@link #rawValueOf}，两者只在枚举上不同。
+     */
+    private String valueOf(CatalogEntry e, ParamSpec p) {
+        String v = rawValueOf(e, p);
+        if (!ParamSpec.TYPE_ENUM.equals(p.type) || p.options.isEmpty()) {
+            return v;
+        }
+        for (int i = 0; i < p.options.size(); i++) {
+            String o = p.options.get(i);
+            if (o != null && o.equals(v)) {
+                return p.optionLabel(i, o);
+            }
+        }
+        return v;
     }
 
     private void commitFields() {
@@ -2468,7 +2709,12 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 continue;
             }
             try {
-                draft.put(key, en.getValue().getText());
+                // 枚举框里显示的是中文名，写回草稿前必须换回原始值 ——
+                // 否则 rebuild 时 commitFields 会把「紫蓝星云」当参数值存进 draft，
+                // 拼命令行时就会带上中文名（游戏只认 nebula）。
+                String v = normalizeEnumInput(key.substring(0, bar), key.substring(bar + 1),
+                        en.getValue().getText());
+                draft.put(key, v == null ? "" : v);
             } catch (Throwable ignored) {
             }
         }
@@ -2674,7 +2920,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         pickerOpen = false;
         pickerSuggestions = null;
         pickerEnum = false;
-        statusLine = "已选择: " + (id == null || id.isEmpty() ? "（留空）" : id);
+        // 状态行显示中文名，但写回草稿的仍是原始值（命令拼装用的是 id）。
+        statusLine = "已选择: " + enumDisplay(pickerCommand, pickerParamKey, id);
         needsRebuild = true;
     }
 
@@ -2688,9 +2935,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         List<IdOption> out = new ArrayList<IdOption>();
         List<String> opts = p == null ? null : p.options;
         if (opts != null && !opts.isEmpty()) {
-            for (String o : opts) {
-                String v = o == null ? "" : o;
-                out.add(new IdOption(v, enumLabel(v), "", ""));
+            for (int i = 0; i < opts.size(); i++) {
+                String v = opts.get(i) == null ? "" : opts.get(i);
+                // 有中文名就用中文名（「紫蓝星云」而不是「nebula」），
+                // 但写进命令行的仍是原始值 —— IdOption 的 id 与 name 分开正是为此。
+                out.add(new IdOption(v, p.optionLabel(i, v), "", ""));
             }
             return out;
         }
@@ -2701,6 +2950,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     private static String enumLabel(String v) {
         return v == null || v.isEmpty() ? "（留空）" : v;
+    }
+
+    /** 把某个枚举值翻成界面上的中文名；找不到定义时原样返回。 */
+    private String enumDisplay(String command, String paramKey, String value) {
+        CatalogEntry e = catalog.byCommand(command);
+        if (e != null) {
+            for (ParamSpec p : e.params) {
+                if (!p.key.equals(paramKey)) {
+                    continue;
+                }
+                for (int i = 0; i < p.options.size(); i++) {
+                    String v = p.options.get(i);
+                    if (v != null && v.equals(value)) {
+                        return p.optionLabel(i, v);
+                    }
+                }
+            }
+        }
+        return enumLabel(value);
     }
 
     private List<IdOption> idOptions(String source) {
@@ -2771,7 +3039,8 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         List<String> lines = new ArrayList<String>();
         Map<String, String> vals = new LinkedHashMap<String, String>();
         for (ParamSpec p : e.params) {
-            String v = valueOf(e, p);
+            // 必须用原始值：枚举在界面上显示中文名，拼进命令行的得是 nebula 而不是「紫蓝星云」。
+            String v = rawValueOf(e, p);
             boolean hasSource = p.source != null && !p.source.isEmpty();
             if (ParamSpec.TYPE_ID.equals(p.type) && hasSource && v != null && !v.trim().isEmpty()) {
                 List<IdOption> opts = idOptions(p.source);
@@ -2847,7 +3116,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             if (!p.required) {
                 continue;
             }
-            String v = valueOf(e, p);
+            String v = rawValueOf(e, p);
             if (v == null || v.trim().isEmpty()) {
                 missing.add(p.labelOrKey());
             }
@@ -2908,7 +3177,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     /** 保存参数后逐条执行。 */
     private void persistAndRun(CatalogEntry e, List<String> lines) {
         for (ParamSpec p : e.params) {
-            String v = valueOf(e, p);
+            String v = rawValueOf(e, p);
             ParamStore.set(e.command, p.key, p.format(v));
         }
         for (String line : lines) {
@@ -2999,7 +3268,7 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         String id = resolveWingId(idText);
         if (id == null) {
             Console.showMessage("未找到战机 id '" + idText
-                    + "'，请检查拼写（可用「加战机」按钮的选择器挑选）");
+                    + "'，请检查拼写（可用“加战机”按钮的选择器挑选）");
             return true;
         }
 

@@ -35,6 +35,9 @@ every console command gets a clickable button, so you never have to remember com
   （保存在 `saves/common/config/console_frontend_params.json.data`）。
 - **ID 选择器**：需要 ID 的参数（如「加物品」）提供「下拉选择 + 直接输入 + 搜索」三合一，
   列表**以游戏内名称为主，ID 以灰色小字作为注释保留**。
+- **天体编辑面板**：新增「自然天体 / 人造设施 / 删除」三类界面——行星、星云、行星环、小行星带、
+  小行星群（残骸云）都能在面板里填参数直接生成；空间站与通信中继、导航浮标等人造设施同理；
+  删除类按当前星系的天体列表挑选，无需手打 ID。生成代码走 `runcode`，不依赖任何第三方天体 Mod。
 - **中文界面**：默认使用游戏内置、且已含 CJK 字形的 `graphics/fonts/victor16.fnt`
   （直接从游戏自带的字库读取）。
   若未安装汉化包，可在设置中开启 `使用英文标签`。
@@ -50,7 +53,7 @@ every console command gets a clickable button, so you never have to remember com
 ## 安装
 
 1. 确认已安装 **Console Commands 4.0.x**（id: `lw_console`）与 **LazyLib**。
-2. 从本仓库的 **Releases** 页面下载 `ConsoleFrontend-0.2.3.zip` 并解压。
+2. 从本仓库的 **Releases** 页面下载 `ConsoleFrontend-0.3.0.zip` 并解压。
 3. 把 `ConsoleFrontend` 文件夹放入 `Starsector/mods/`。
 4. 在启动器中启用 **Console Frontend**。
 5. 进入存档后按 `Ctrl + ~` 呼出面板。
