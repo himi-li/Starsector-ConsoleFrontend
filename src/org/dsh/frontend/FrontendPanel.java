@@ -12,6 +12,7 @@ import com.fs.starfarer.api.campaign.InteractionDialogAPI;
 import com.fs.starfarer.api.campaign.SectorEntityToken;
 import com.fs.starfarer.api.input.InputEventAPI;
 import com.fs.starfarer.api.loading.FighterWingSpecAPI;
+import com.fs.starfarer.api.loading.HullModSpecAPI;
 import com.fs.starfarer.api.ui.Alignment;
 import com.fs.starfarer.api.ui.ButtonAPI;
 import com.fs.starfarer.api.ui.CustomPanelAPI;
@@ -432,6 +433,9 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
     /** addwing 用法提示（与上游一致的观感）。 */
     private static final String ADDWING_USAGE = "用法: addwing <战机id> [数量]";
+
+    /** addhullmod 用法提示。 */
+    private static final String ADDHULLMOD_USAGE = "用法: addhullmod <船体插件id> [数量]";
 
     /** 当前正在编辑的输入框 key（不依赖原生焦点机制，见 {@link #forwardKey}）。 */
     private String focusedField;
@@ -3193,6 +3197,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             if (runAddWing(commandLine)) {
                 return;
             }
+            // 船体插件同理：上游 AddHullmod 的候选表过滤掉了所有 isHidden() 的插件，
+            // 隐藏插件永远无法精确命中，会被模糊匹配分给某个相似的可见插件（见 runAddHullmod）。
+            if (runAddHullmod(commandLine)) {
+                return;
+            }
             Console.parseInput(commandLine, context);
             if (Global.getCurrentState() == GameState.CAMPAIGN) {
                 try {
@@ -3314,6 +3323,149 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         int containsHits = 0;
         try {
             for (FighterWingSpecAPI s : Global.getSettings().getAllFighterWingSpecs()) {
+                if (s == null || s.getId() == null) {
+                    continue;
+                }
+                String id = s.getId();
+                String lid = id.toLowerCase();
+                if (lid.equals(lower)) {
+                    exact = id;
+                    break;
+                }
+                if (lid.startsWith(lower)) {
+                    prefixHits++;
+                    if (prefixHits == 1) {
+                        prefix = id;
+                    }
+                }
+                if (lid.contains(lower) || lower.contains(lid)) {
+                    containsHits++;
+                    if (containsHits == 1) {
+                        contains = id;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (exact != null) {
+            return exact;
+        }
+        if (prefixHits == 1) {
+            return prefix;
+        }
+        if (prefixHits == 0 && containsHits == 1) {
+            return contains;
+        }
+        return null;
+    }
+
+    // ================= addhullmod 保护 =================
+
+    /**
+     * 面板侧自实现 addhullmod，绕开上游 {@code AddHullmod} 的隐藏项过滤与模糊匹配。
+     *
+     * <p>上游的候选表是 {@code getAllHullModSpecs()} 里**过滤掉 {@code isHidden()} 的**那部分，
+     * 再交给 {@code CommandUtils.findBestStringMatch}（Jaro-Winkler，阈值取
+     * {@code ConsoleSettings.getTypoCorrectionThreshold()}，并列时先到者胜）。
+     * 于是任何隐藏插件都永远精确命中不了，只能被相似度分配到某个可见插件。
+     *
+     * <p>实测：{@code armaa_autoModuleRepair}（自动维修）在 hull_mods.csv 里
+     * {@code hidden=TRUE, hiddenEverywhere=TRUE}，面板选择器能选到它（{@link IdSource}
+     * 用的是全量表），但上游把它匹配成了 {@code armaa_targetingDisruptor}（目标定位干扰器），
+     * 玩家背包里凭空多出另一个插件。
+     *
+     * <p>面板传入的 id 是选择器给出的权威值，直接按原样添加即可。
+     * 只在命令为 addhullmod 时接管；返回 false 表示「不是 addhullmod」，交回原解析链路。
+     */
+    private boolean runAddHullmod(String commandLine) {
+        String line = commandLine == null ? "" : commandLine.trim();
+        if (line.isEmpty()) {
+            return false;
+        }
+        String[] parts = line.split("\\s+");
+        if (!"addhullmod".equalsIgnoreCase(parts[0])) {
+            return false;
+        }
+        if (context == null || !context.isInCampaign()) {
+            Console.showMessage(CommonStrings.ERROR_CAMPAIGN_ONLY);
+            return true;
+        }
+        if (parts.length < 2 || parts.length > 3) {
+            Console.showMessage(ADDHULLMOD_USAGE);
+            return true;
+        }
+
+        String idText = parts[1];
+        int amount = 1;
+        if (parts.length == 3) {
+            String amountText = parts[2];
+            if (!CommandUtils.isInteger(amountText) && CommandUtils.isInteger(idText)) {
+                idText = parts[2];
+                amountText = parts[1];
+            }
+            if (!CommandUtils.isInteger(amountText)) {
+                Console.showMessage(ADDHULLMOD_USAGE);
+                return true;
+            }
+            try {
+                amount = Integer.parseInt(amountText);
+            } catch (Throwable t) {
+                Console.showMessage(ADDHULLMOD_USAGE);
+                return true;
+            }
+        }
+        if (amount <= 0) {
+            return true;
+        }
+
+        String id = resolveHullModId(idText);
+        if (id == null) {
+            Console.showMessage("未找到船体插件 id '" + idText
+                    + "'，请检查拼写（可用“加船插”按钮的选择器挑选）");
+            return true;
+        }
+
+        try {
+            CargoAPI cargo = Global.getSector().getPlayerFleet().getCargo();
+            cargo.addHullmods(id, amount);
+            Console.showMessage("Added modspec " + id + " to player inventory.");
+        } catch (Throwable t) {
+            try {
+                Console.showException("前端面板执行失败: " + commandLine, t);
+            } catch (Throwable ignored) {
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 把玩家/面板给出的插件文本解析成真实 hullmod id。
+     *
+     * <p>顺序：spec 直查 → 忽略大小写的精确 id → 唯一前缀 → 唯一包含。
+     * 全程只认「精确/唯一」，不做相似度猜测 —— 猜错比报错更糟。
+     *
+     * <p>候选表用 {@code getAllHullModSpecs()} 全量（含隐藏插件），与 {@link IdSource} 一致：
+     * 隐藏插件也是合法 id，能装进舰队就行，是否在舰船装配界面里列出来是另一回事。
+     */
+    private static String resolveHullModId(String text) {
+        String raw = text == null ? "" : text.trim();
+        if (raw.isEmpty()) {
+            return null;
+        }
+        try {
+            if (Global.getSettings().getHullModSpec(raw) != null) {
+                return raw;
+            }
+        } catch (Throwable ignored) {
+        }
+        String lower = raw.toLowerCase();
+        String exact = null;
+        String prefix = null;
+        int prefixHits = 0;
+        String contains = null;
+        int containsHits = 0;
+        try {
+            for (HullModSpecAPI s : Global.getSettings().getAllHullModSpecs()) {
                 if (s == null || s.getId() == null) {
                     continue;
                 }
