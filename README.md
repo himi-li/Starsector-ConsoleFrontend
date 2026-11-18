@@ -31,6 +31,11 @@ every console command gets a clickable button, so you never have to remember com
 - **热键呼出**：默认 `Ctrl + ~`（反引号），可在游戏内 Mod 设置（LunaLib）中更改。
 - **点按钮即执行**：每个按钮对应一条控制台命令，点击后立即执行，输出显示在面板底部日志区。
 - **自动收录全部命令**：从 Console Commands 的命令表读取，**任何已装 Mod 注册的命令都会自动出现在面板上**。
+- **第三方 Mod 命令已汉化**：势力争霸（Nexerelin）、工业革命（IndEvo）、舰船武器包（SWP）、
+  空间站改装（Station Augments）、MagicLib、BoxUtil 以及 Console Commands 自带的新命令，
+  都配好了中文按钮名、中文说明与参数标签；枚举参数（联盟性质、特工专精、空间站类型、
+  站台组件、渲染通道等）做成中文下拉，ID 类参数接游戏内的中文名单。
+  **没有改动任何原 Mod 的文件**，全部只写在本 mod 的 `data/strings/frontend_labels.json` 里。
 - **参数可自定义并记住**：如「加星币」可自由设置数量，设置后默认沿用上次的数值，直到再次修改
   （保存在 `saves/common/config/console_frontend_params.json.data`）。
 - **ID 选择器**：需要 ID 的参数（如「加物品」）提供「下拉选择 + 直接输入 + 搜索」三合一，
@@ -38,6 +43,11 @@ every console command gets a clickable button, so you never have to remember com
 - **天体编辑面板**：新增「自然天体 / 人造设施 / 删除」三类界面——行星、星云、行星环、小行星带、
   小行星群（残骸云）都能在面板里填参数直接生成；空间站与通信中继、导航浮标等人造设施同理；
   删除类按当前星系的天体列表挑选，无需手打 ID。生成代码走 `runcode`，不依赖任何第三方天体 Mod。
+- **危险操作二次确认**：会破坏存档或不可撤销的命令（解锁全部蓝图、删除天体、摧毁殖民地、
+  转让市场归属、重置派系关系、角色退休、自杀）默认先弹面板内的确认层，
+  逐条列出「将要执行」的完整命令行，点「执行」才真正生效，点「取消」或按 ESC 回到参数页。
+  确认层由面板自己绘制，不使用游戏自带的确认框（后者在本面板打开时必定不显示，见更新日志）。
+  可在游戏内 Mod 设置中关闭。
 - **中文界面**：默认使用游戏内置、且已含 CJK 字形的 `graphics/fonts/victor16.fnt`
   （直接从游戏自带的字库读取）。
   若未安装汉化包，可在设置中开启 `使用英文标签`。
@@ -53,7 +63,7 @@ every console command gets a clickable button, so you never have to remember com
 ## 安装
 
 1. 确认已安装 **Console Commands 4.0.x**（id: `lw_console`）与 **LazyLib**。
-2. 从本仓库的 **Releases** 页面下载 `ConsoleFrontend-0.3.1.zip` 并解压。
+2. 从本仓库的 **Releases** 页面下载 `ConsoleFrontend-0.3.2.zip` 并解压。
 3. 把 `ConsoleFrontend` 文件夹放入 `Starsector/mods/`。
 4. 在启动器中启用 **Console Frontend**。
 5. 进入存档后按 `Ctrl + ~` 呼出面板。
@@ -126,6 +136,10 @@ $JdkDir        = 'C:\Program Files\Java\jdk-21\bin'
   `system` / `market+system` / `condition` / `industry` / `submarket` / `shipSystem` /
   `officer` / `personality`）。
 - `run` 用 `%key%` 引用参数值；也可以是数组，按顺序执行多条命令。
+- `params[].options` 既可写成裸字符串数组，也可写成 `{ "label": "中文名", "value": "原始值" }`：
+  **下拉里显示中文名，拼进命令行的仍是 `value`**。
+- `params[].default` 留空（`""`）表示「默认不传这一项」——面板会自动把空参数从命令行里去掉。
+- `"confirm": true` 的命令在执行前会弹面板内的二次确认层。
 - 未在 `commands` 中列出的命令会自动生成按钮（标签为命令名，参数从语法推导）。
 
 ## 控制台命令

@@ -43,6 +43,14 @@
     "all": {
       "name": "全部命令",
       "order": 999
+    },
+    "quest": {
+      "name": "任务与赏金",
+      "order": 62
+    },
+    "diplomacy": {
+      "name": "外交与势力",
+      "order": 65
     }
   },
   "order": [
@@ -139,7 +147,56 @@
     "history",
     "alias",
     "runcode",
-    "debugdialogs"
+    "debugdialogs",
+    "addagent",
+    "createalliance",
+    "creatediplomacyevent",
+    "leavealliance",
+    "printdeadofficers",
+    "printdisposition",
+    "reloadnexconfig",
+    "resetrelationships",
+    "retirecharacter",
+    "setmarketowner",
+    "spawninvasionfleet",
+    "spawnraidfleet",
+    "spawnrespawnfleet",
+    "startvengeanceevent",
+    "syncrelationships",
+    "magiclib_listbounties",
+    "magiclib_listrequirements",
+    "magiclib_resetbounty",
+    "magiclib_unlockpaintjob",
+    "indevo_assignsalvagespecials",
+    "indevo_cleardisruption",
+    "indevo_printmoddata",
+    "indevo_printraidtimeout",
+    "indevo_setmarketgrowth",
+    "indevo_spawnruins",
+    "indevo_spawnstation",
+    "swp_ibbstage",
+    "swp_surveyall",
+    "swp_printtags",
+    "swp_btcall",
+    "sa_addaugment",
+    "sa_removeaugment",
+    "sa_teachaugment",
+    "sa_generateaugments",
+    "sa_genspecialcontent",
+    "tem_triggercrusade",
+    "printcontextinfo",
+    "showaastatus",
+    "showinstancememoryusage",
+    "showstatictrailmemoryusage",
+    "showmultipasschannel",
+    "infinitefuel",
+    "infinitesupplies",
+    "legacyconsolesettings",
+    "spawnasteroids",
+    "spawnderelict",
+    "spawnfleet",
+    "test",
+    "consolefrontend"
   ],
   "commands": {
     "addcredits": {
@@ -1930,6 +1987,1390 @@
         }
       ],
       "run": "astroremove id=%id%"
+    },
+    "addagent": {
+      "label": "添加特工",
+      "category": "character",
+      "desc": "为玩家添加一名势力争霸特工，需要指定所在市场",
+      "params": [
+        {
+          "key": "market",
+          "label": "所在市场",
+          "type": "id",
+          "source": "market",
+          "default": "",
+          "hint": "特工挂靠的市场，必须指定",
+          "required": true
+        },
+        {
+          "key": "level",
+          "label": "特工等级",
+          "type": "int",
+          "default": 1,
+          "min": 1,
+          "max": 5,
+          "hint": "1~5 级，等级越高能力越强"
+        },
+        {
+          "key": "spec",
+          "label": "专精方向",
+          "type": "enum",
+          "options": [
+            {
+              "label": "谈判专家",
+              "value": "NEGOTIATOR"
+            },
+            {
+              "label": "破坏者",
+              "value": "SABOTEUR"
+            },
+            {
+              "label": "混合型",
+              "value": "HYBRID"
+            }
+          ],
+          "default": "",
+          "hint": "留空则随机或默认专精"
+        }
+      ],
+      "run": "addagent %market% %level% %spec%"
+    },
+    "createalliance": {
+      "label": "建立联盟",
+      "category": "diplomacy",
+      "desc": "让两个派系结成联盟；若其中一方已有联盟，则把另一方并入该联盟",
+      "params": [
+        {
+          "key": "faction1",
+          "label": "派系一",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony",
+          "required": true
+        },
+        {
+          "key": "faction2",
+          "label": "派系二",
+          "type": "id",
+          "source": "faction",
+          "default": "player",
+          "required": true
+        },
+        {
+          "key": "alignment",
+          "label": "联盟性质",
+          "type": "enum",
+          "options": [
+            {
+              "label": "企业制",
+              "value": "CORPORATE"
+            },
+            {
+              "label": "军国主义",
+              "value": "MILITARIST"
+            },
+            {
+              "label": "技术官僚",
+              "value": "TECHNOCRATIC"
+            },
+            {
+              "label": "等级制",
+              "value": "HIERARCHICAL"
+            },
+            {
+              "label": "外交制",
+              "value": "DIPLOMATIC"
+            }
+          ],
+          "default": "",
+          "hint": "留空则随机"
+        }
+      ],
+      "run": "createalliance %faction1% %faction2% %alignment%"
+    },
+    "creatediplomacyevent": {
+      "label": "创建外交事件",
+      "category": "diplomacy",
+      "desc": "在两个派系之间创建一次外交事件",
+      "params": [
+        {
+          "key": "faction1",
+          "label": "派系一",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony",
+          "required": true
+        },
+        {
+          "key": "faction2",
+          "label": "派系二",
+          "type": "id",
+          "source": "faction",
+          "default": "player",
+          "required": true
+        },
+        {
+          "key": "stage",
+          "label": "事件类型标识",
+          "type": "text",
+          "default": "",
+          "hint": "第三参是某个事件类型的标识符，留空则随机"
+        }
+      ],
+      "run": "creatediplomacyevent %faction1% %faction2% %stage%"
+    },
+    "leavealliance": {
+      "label": "退出联盟",
+      "category": "diplomacy",
+      "desc": "让指定派系退出它所在的联盟（没有联盟则无事发生）",
+      "params": [
+        {
+          "key": "faction",
+          "label": "派系",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony",
+          "required": true
+        }
+      ],
+      "run": "leavealliance %faction%"
+    },
+    "printdeadofficers": {
+      "label": "阵亡军官清单",
+      "category": "character",
+      "desc": "列出所有在战斗中阵亡的玩家军官",
+      "run": "printdeadofficers"
+    },
+    "printdisposition": {
+      "label": "查看外交倾向",
+      "category": "diplomacy",
+      "desc": "打印派系一对派系二的隐藏外交倾向值",
+      "params": [
+        {
+          "key": "faction1",
+          "label": "派系一",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony",
+          "required": true
+        },
+        {
+          "key": "faction2",
+          "label": "派系二",
+          "type": "id",
+          "source": "faction",
+          "default": "player",
+          "required": true
+        }
+      ],
+      "run": "printdisposition %faction1% %faction2%"
+    },
+    "reloadnexconfig": {
+      "label": "重载势力争霸配置",
+      "category": "system",
+      "desc": "重新读取 exerelin_settings.json，并弹出对话框修改星域设置",
+      "run": "reloadnexconfig"
+    },
+    "resetrelationships": {
+      "label": "重置派系关系",
+      "category": "diplomacy",
+      "desc": "把所有派系关系重置成刚开新档的状态（科武斯模式下对 mod 派系无效）",
+      "confirm": true,
+      "run": "resetrelationships"
+    },
+    "retirecharacter": {
+      "label": "角色退休",
+      "category": "character",
+      "desc": "让你的角色退休，并结束本局游戏",
+      "confirm": true,
+      "run": "retirecharacter"
+    },
+    "setmarketowner": {
+      "label": "转让市场归属",
+      "category": "market",
+      "desc": "把某个市场直接移交给另一个派系，相当于被占领",
+      "confirm": true,
+      "params": [
+        {
+          "key": "entity",
+          "label": "目标市场",
+          "type": "id",
+          "source": "market",
+          "default": "jangala",
+          "required": true,
+          "hint": "按市场 ID 或名称匹配；只能选已存在的市场"
+        },
+        {
+          "key": "owner",
+          "label": "新归属派系",
+          "type": "id",
+          "source": "faction",
+          "default": "",
+          "hint": "留空则随机挑一个非防守方的存活派系"
+        }
+      ],
+      "run": "setmarketowner %entity% %owner%"
+    },
+    "spawninvasionfleet": {
+      "label": "生成入侵舰队",
+      "category": "fleet",
+      "desc": "从出发市场生成一支开往目标市场的入侵舰队",
+      "params": [
+        {
+          "key": "source",
+          "label": "出发市场",
+          "type": "id",
+          "source": "market",
+          "default": "jangala",
+          "required": true
+        },
+        {
+          "key": "target",
+          "label": "目标市场",
+          "type": "id",
+          "source": "market",
+          "default": "chicomoztoc",
+          "required": true
+        }
+      ],
+      "run": "spawninvasionfleet %source% %target%"
+    },
+    "spawnraidfleet": {
+      "label": "生成突袭舰队",
+      "category": "fleet",
+      "desc": "从出发市场生成一支开往目标市场的突袭舰队",
+      "params": [
+        {
+          "key": "source",
+          "label": "出发市场",
+          "type": "id",
+          "source": "market",
+          "default": "jangala",
+          "required": true
+        },
+        {
+          "key": "target",
+          "label": "目标市场",
+          "type": "id",
+          "source": "market",
+          "default": "chicomoztoc",
+          "required": true
+        }
+      ],
+      "run": "spawnraidfleet %source% %target%"
+    },
+    "spawnrespawnfleet": {
+      "label": "生成重生舰队",
+      "category": "fleet",
+      "desc": "生成一支飞往随机合适目标的重生舰队",
+      "params": [
+        {
+          "key": "faction",
+          "label": "派系",
+          "type": "id",
+          "source": "faction",
+          "default": "",
+          "hint": "留空则尝试挑一个当前不在本星域的派系"
+        }
+      ],
+      "run": "spawnrespawnfleet %faction%"
+    },
+    "startvengeanceevent": {
+      "label": "触发复仇舰队",
+      "category": "fleet",
+      "desc": "为指定派系生成一支复仇舰队",
+      "params": [
+        {
+          "key": "faction",
+          "label": "派系",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony",
+          "required": true
+        },
+        {
+          "key": "level",
+          "label": "复仇等级",
+          "type": "int",
+          "default": "",
+          "min": 1,
+          "hint": "留空则采用该派系当前的复仇阶段；一般填 1~10"
+        }
+      ],
+      "run": "startvengeanceevent %faction% %level%"
+    },
+    "syncrelationships": {
+      "label": "同步派系关系",
+      "category": "diplomacy",
+      "desc": "把派系关系同步成与玩家一致；使用存档转移后跑一次",
+      "run": "syncrelationships"
+    },
+    "magiclib_listbounties": {
+      "label": "赏金列表",
+      "category": "quest",
+      "desc": "列出 MagicLib 赏金板上已加载的赏金",
+      "params": [
+        {
+          "key": "bountyId",
+          "label": "赏金 ID（可留空）",
+          "type": "text",
+          "default": "",
+          "hint": "留空列出全部；填 ID 只看这一条"
+        }
+      ],
+      "run": "MagicLib_ListBounties %bountyId%"
+    },
+    "magiclib_listrequirements": {
+      "label": "赏金出现条件",
+      "category": "quest",
+      "desc": "列出当前激活的赏金，以及它们要出现需要满足的条件",
+      "params": [
+        {
+          "key": "bountyId",
+          "label": "赏金 ID（可留空）",
+          "type": "text",
+          "default": "",
+          "hint": "留空列出全部；填 ID 只看这一条"
+        }
+      ],
+      "run": "MagicLib_ListRequirements %bountyId%"
+    },
+    "magiclib_resetbounty": {
+      "label": "重置赏金",
+      "category": "quest",
+      "desc": "重置一条 MagicLib 赏金，让它重新可接",
+      "params": [
+        {
+          "key": "bountyId",
+          "label": "赏金 ID",
+          "type": "text",
+          "default": "",
+          "required": true
+        }
+      ],
+      "run": "MagicLib_ResetBounty %bountyId%"
+    },
+    "magiclib_unlockpaintjob": {
+      "label": "解锁涂装",
+      "category": "fleet",
+      "desc": "永久解锁 MagicLib 涂装",
+      "params": [
+        {
+          "key": "paintjobId",
+          "label": "涂装 ID 或 all",
+          "type": "text",
+          "default": "",
+          "hint": "填 all 永久解锁全部涂装；填某个 ID 只解锁那一个；留空则列出所有可用涂装"
+        }
+      ],
+      "run": "MagicLib_UnlockPaintjob %paintjobId%"
+    },
+    "indevo_assignsalvagespecials": {
+      "label": "分配打捞特殊内容",
+      "category": "system",
+      "desc": "开发工具：给星系内实体分配打捞时的特殊内容",
+      "run": "indevo_assignSalvageSpecials"
+    },
+    "indevo_cleardisruption": {
+      "label": "清除产业中断",
+      "category": "market",
+      "desc": "移除当前市场所有产业的中断状态",
+      "run": "indevo_clearDisruption"
+    },
+    "indevo_printmoddata": {
+      "label": "打印 mod 数据",
+      "category": "system",
+      "desc": "打印工业革命的数据与类汇总",
+      "run": "indevo_printModData"
+    },
+    "indevo_printraidtimeout": {
+      "label": "打印袭击超时",
+      "category": "system",
+      "desc": "列出当前各星系的袭击超时计时",
+      "run": "indevo_printRaidTimeout"
+    },
+    "indevo_setmarketgrowth": {
+      "label": "设置市场增长",
+      "category": "market",
+      "desc": "把当前市场的增长率设成指定值",
+      "params": [
+        {
+          "key": "amount",
+          "label": "增长率",
+          "type": "float",
+          "default": 0.5,
+          "min": 0,
+          "max": 1,
+          "hint": "0~1 之间；0.43 表示 43%。只能在与市场交互时使用"
+        }
+      ],
+      "run": "indevo_setMarketGrowth %amount%"
+    },
+    "indevo_spawnruins": {
+      "label": "生成废墟",
+      "category": "map",
+      "desc": "在你所在位置生成废墟（程序生成失败时用它补救）",
+      "run": "indevo_spawnRuins"
+    },
+    "indevo_spawnstation": {
+      "label": "生成空间站",
+      "category": "astroArtificial",
+      "desc": "在你所在位置生成一座空间站",
+      "params": [
+        {
+          "key": "type",
+          "label": "空间站类型",
+          "type": "enum",
+          "options": [
+            {
+              "label": "采矿站（残骸）",
+              "value": "mining"
+            },
+            {
+              "label": "居住站（残骸）",
+              "value": "habitat"
+            },
+            {
+              "label": "研究站（残骸）",
+              "value": "research"
+            },
+            {
+              "label": "军械站",
+              "value": "arsenal"
+            },
+            {
+              "label": "轨道实验室",
+              "value": "laboratory"
+            }
+          ],
+          "default": "mining",
+          "hint": "矿站/居住站/研究站是残骸版；军械站与轨道实验室是工业革命专属外观"
+        }
+      ],
+      "run": "indevo_spawnStation %type%"
+    },
+    "swp_ibbstage": {
+      "label": "设置IBB阶段",
+      "category": "quest",
+      "desc": "把当前的 IBB 赏金推进到指定阶段",
+      "params": [
+        {
+          "key": "stage",
+          "label": "阶段",
+          "type": "int",
+          "default": 0,
+          "min": 0,
+          "max": 29,
+          "hint": "0~29；不同阶段对应不同的名人赏金，部分阶段需要装载对应 mod 才能用"
+        }
+      ],
+      "run": "SWP_IBBStage %stage%"
+    },
+    "swp_surveyall": {
+      "label": "全部星球扫描",
+      "category": "map",
+      "desc": "立即完成所有行星的扫描",
+      "run": "SWP_SurveyAll"
+    },
+    "swp_printtags": {
+      "label": "打印地点标签",
+      "category": "system",
+      "desc": "打印所有地点的标签列表",
+      "run": "SWP_PrintTags"
+    },
+    "swp_btcall": {
+      "label": "沉宝任务调用",
+      "category": "quest",
+      "desc": "向沉宝（Buried Treasure）任务实例发送一次调用，用于调试任务进度",
+      "params": [
+        {
+          "key": "action",
+          "label": "动作",
+          "type": "text",
+          "default": "",
+          "required": true
+        },
+        {
+          "key": "params",
+          "label": "参数",
+          "type": "text",
+          "default": "",
+          "hint": "没有参数时留空即可"
+        }
+      ],
+      "run": "SWP_BTCall %action% %params%"
+    },
+    "sa_addaugment": {
+      "label": "加装站台组件",
+      "category": "market",
+      "desc": "给当前市场的空间站加装一个组件（市场必须建有空间站）",
+      "params": [
+        {
+          "key": "augmentId",
+          "label": "组件",
+          "type": "enum",
+          "options": [
+            {
+              "label": "K-型 护盾分流",
+              "value": "SA_shieldShunt"
+            },
+            {
+              "label": "覆写安全协议",
+              "value": "SA_safetyOverrides"
+            },
+            {
+              "label": "旋转中轴超频",
+              "value": "SA_axialOverclocking"
+            },
+            {
+              "label": "指挥中心",
+              "value": "SA_commsCenter"
+            },
+            {
+              "label": "电子对抗组件",
+              "value": "SA_ecmPackage"
+            },
+            {
+              "label": "导航中继器",
+              "value": "SA_navRelay"
+            },
+            {
+              "label": "挥发性反应堆燃料",
+              "value": "SA_highExplosive"
+            },
+            {
+              "label": "高精度传感器",
+              "value": "SA_highResSensors"
+            },
+            {
+              "label": "作战支援装备",
+              "value": "SA_supportOutfit"
+            },
+            {
+              "label": "后备无人机甲板",
+              "value": "SA_regenerativeDrones"
+            },
+            {
+              "label": "空间站维修套件",
+              "value": "SA_stationRepairUnit"
+            },
+            {
+              "label": "战术数据链",
+              "value": "SA_tacticalLink"
+            },
+            {
+              "label": "效率检修",
+              "value": "SA_efficiencyOverhaul"
+            },
+            {
+              "label": "无人机武器超频",
+              "value": "SA_droneAAF"
+            },
+            {
+              "label": "战线后侧部署",
+              "value": "SA_backlineStation"
+            },
+            {
+              "label": "后勤无人机",
+              "value": "SA_logisticsDrones"
+            },
+            {
+              "label": "经济性改装",
+              "value": "SA_economyConversion"
+            },
+            {
+              "label": "水培设施",
+              "value": "SA_hydroponics"
+            },
+            {
+              "label": "深度护盾耗散器",
+              "value": "SA_fluxShunt"
+            },
+            {
+              "label": "战机时流核心",
+              "value": "SA_fighterTimeflow"
+            },
+            {
+              "label": "泡泡护盾",
+              "value": "SA_bubbleShield"
+            },
+            {
+              "label": "跃迁驱动器",
+              "value": "SA_jumpEngine"
+            },
+            {
+              "label": "AI 战机数据链",
+              "value": "SA_aiFighterUplink"
+            },
+            {
+              "label": "极端改装",
+              "value": "SA_extremeModifications"
+            },
+            {
+              "label": "宏推进器",
+              "value": "SA_movableStation"
+            },
+            {
+              "label": "矿业空间站",
+              "value": "SA_miningStation"
+            },
+            {
+              "label": "特殊改装",
+              "value": "SA_specialModifications"
+            },
+            {
+              "label": "祝圣空间站",
+              "value": "SA_sanctifiedStation"
+            },
+            {
+              "label": "高能量吸引场",
+              "value": "SA_moteSink"
+            },
+            {
+              "label": "光尘沉降仪",
+              "value": "SA_moteSinkLow"
+            },
+            {
+              "label": "渊幕屏障",
+              "value": "SA_shroudedMantle"
+            },
+            {
+              "label": "渊幕透镜",
+              "value": "SA_shroudedLens"
+            },
+            {
+              "label": "渊幕雷暴",
+              "value": "SA_shroudedThunderhead"
+            },
+            {
+              "label": "渊幕信标",
+              "value": "SA_shroudedBeacon"
+            },
+            {
+              "label": "碎片集群",
+              "value": "SA_fragmentSwarm"
+            },
+            {
+              "label": "次级构筑器",
+              "value": "SA_secondaryFabricator"
+            },
+            {
+              "label": "碎片引导仪",
+              "value": "SA_fragmentCoordinator"
+            },
+            {
+              "label": "动能碎片",
+              "value": "SA_kineticFragments"
+            },
+            {
+              "label": "追踪碎片",
+              "value": "SA_seekerFragments"
+            },
+            {
+              "label": "攻击碎片",
+              "value": "SA_attackSwarms"
+            },
+            {
+              "label": "构筑集群",
+              "value": "SA_constructionSwarms"
+            },
+            {
+              "label": "织解集群",
+              "value": "SA_defabSwarms"
+            },
+            {
+              "label": "作战心智改装",
+              "value": "SA_warmindProtocols"
+            },
+            {
+              "label": "外置防御平台",
+              "value": "SA_defensePlatforms"
+            }
+          ],
+          "default": "",
+          "hint": "只有空间站才能加装；组件消耗装配点数",
+          "required": true
+        }
+      ],
+      "run": "SA_addAugment %augmentId%"
+    },
+    "sa_removeaugment": {
+      "label": "移除站台组件",
+      "category": "market",
+      "desc": "移除当前市场空间站上的一个组件",
+      "params": [
+        {
+          "key": "augmentId",
+          "label": "组件",
+          "type": "enum",
+          "options": [
+            {
+              "label": "K-型 护盾分流",
+              "value": "SA_shieldShunt"
+            },
+            {
+              "label": "覆写安全协议",
+              "value": "SA_safetyOverrides"
+            },
+            {
+              "label": "旋转中轴超频",
+              "value": "SA_axialOverclocking"
+            },
+            {
+              "label": "指挥中心",
+              "value": "SA_commsCenter"
+            },
+            {
+              "label": "电子对抗组件",
+              "value": "SA_ecmPackage"
+            },
+            {
+              "label": "导航中继器",
+              "value": "SA_navRelay"
+            },
+            {
+              "label": "挥发性反应堆燃料",
+              "value": "SA_highExplosive"
+            },
+            {
+              "label": "高精度传感器",
+              "value": "SA_highResSensors"
+            },
+            {
+              "label": "作战支援装备",
+              "value": "SA_supportOutfit"
+            },
+            {
+              "label": "后备无人机甲板",
+              "value": "SA_regenerativeDrones"
+            },
+            {
+              "label": "空间站维修套件",
+              "value": "SA_stationRepairUnit"
+            },
+            {
+              "label": "战术数据链",
+              "value": "SA_tacticalLink"
+            },
+            {
+              "label": "效率检修",
+              "value": "SA_efficiencyOverhaul"
+            },
+            {
+              "label": "无人机武器超频",
+              "value": "SA_droneAAF"
+            },
+            {
+              "label": "战线后侧部署",
+              "value": "SA_backlineStation"
+            },
+            {
+              "label": "后勤无人机",
+              "value": "SA_logisticsDrones"
+            },
+            {
+              "label": "经济性改装",
+              "value": "SA_economyConversion"
+            },
+            {
+              "label": "水培设施",
+              "value": "SA_hydroponics"
+            },
+            {
+              "label": "深度护盾耗散器",
+              "value": "SA_fluxShunt"
+            },
+            {
+              "label": "战机时流核心",
+              "value": "SA_fighterTimeflow"
+            },
+            {
+              "label": "泡泡护盾",
+              "value": "SA_bubbleShield"
+            },
+            {
+              "label": "跃迁驱动器",
+              "value": "SA_jumpEngine"
+            },
+            {
+              "label": "AI 战机数据链",
+              "value": "SA_aiFighterUplink"
+            },
+            {
+              "label": "极端改装",
+              "value": "SA_extremeModifications"
+            },
+            {
+              "label": "宏推进器",
+              "value": "SA_movableStation"
+            },
+            {
+              "label": "矿业空间站",
+              "value": "SA_miningStation"
+            },
+            {
+              "label": "特殊改装",
+              "value": "SA_specialModifications"
+            },
+            {
+              "label": "祝圣空间站",
+              "value": "SA_sanctifiedStation"
+            },
+            {
+              "label": "高能量吸引场",
+              "value": "SA_moteSink"
+            },
+            {
+              "label": "光尘沉降仪",
+              "value": "SA_moteSinkLow"
+            },
+            {
+              "label": "渊幕屏障",
+              "value": "SA_shroudedMantle"
+            },
+            {
+              "label": "渊幕透镜",
+              "value": "SA_shroudedLens"
+            },
+            {
+              "label": "渊幕雷暴",
+              "value": "SA_shroudedThunderhead"
+            },
+            {
+              "label": "渊幕信标",
+              "value": "SA_shroudedBeacon"
+            },
+            {
+              "label": "碎片集群",
+              "value": "SA_fragmentSwarm"
+            },
+            {
+              "label": "次级构筑器",
+              "value": "SA_secondaryFabricator"
+            },
+            {
+              "label": "碎片引导仪",
+              "value": "SA_fragmentCoordinator"
+            },
+            {
+              "label": "动能碎片",
+              "value": "SA_kineticFragments"
+            },
+            {
+              "label": "追踪碎片",
+              "value": "SA_seekerFragments"
+            },
+            {
+              "label": "攻击碎片",
+              "value": "SA_attackSwarms"
+            },
+            {
+              "label": "构筑集群",
+              "value": "SA_constructionSwarms"
+            },
+            {
+              "label": "织解集群",
+              "value": "SA_defabSwarms"
+            },
+            {
+              "label": "作战心智改装",
+              "value": "SA_warmindProtocols"
+            },
+            {
+              "label": "外置防御平台",
+              "value": "SA_defensePlatforms"
+            }
+          ],
+          "default": "",
+          "required": true
+        }
+      ],
+      "run": "SA_removeAugment %augmentId%"
+    },
+    "sa_teachaugment": {
+      "label": "教派系组件",
+      "category": "market",
+      "desc": "让某个派系学会使用指定站台组件",
+      "params": [
+        {
+          "key": "factionId",
+          "label": "派系",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony",
+          "required": true
+        },
+        {
+          "key": "augmentId",
+          "label": "组件",
+          "type": "enum",
+          "options": [
+            {
+              "label": "全部组件",
+              "value": "all"
+            },
+            {
+              "label": "K-型 护盾分流",
+              "value": "SA_shieldShunt"
+            },
+            {
+              "label": "覆写安全协议",
+              "value": "SA_safetyOverrides"
+            },
+            {
+              "label": "旋转中轴超频",
+              "value": "SA_axialOverclocking"
+            },
+            {
+              "label": "指挥中心",
+              "value": "SA_commsCenter"
+            },
+            {
+              "label": "电子对抗组件",
+              "value": "SA_ecmPackage"
+            },
+            {
+              "label": "导航中继器",
+              "value": "SA_navRelay"
+            },
+            {
+              "label": "挥发性反应堆燃料",
+              "value": "SA_highExplosive"
+            },
+            {
+              "label": "高精度传感器",
+              "value": "SA_highResSensors"
+            },
+            {
+              "label": "作战支援装备",
+              "value": "SA_supportOutfit"
+            },
+            {
+              "label": "后备无人机甲板",
+              "value": "SA_regenerativeDrones"
+            },
+            {
+              "label": "空间站维修套件",
+              "value": "SA_stationRepairUnit"
+            },
+            {
+              "label": "战术数据链",
+              "value": "SA_tacticalLink"
+            },
+            {
+              "label": "效率检修",
+              "value": "SA_efficiencyOverhaul"
+            },
+            {
+              "label": "无人机武器超频",
+              "value": "SA_droneAAF"
+            },
+            {
+              "label": "战线后侧部署",
+              "value": "SA_backlineStation"
+            },
+            {
+              "label": "后勤无人机",
+              "value": "SA_logisticsDrones"
+            },
+            {
+              "label": "经济性改装",
+              "value": "SA_economyConversion"
+            },
+            {
+              "label": "水培设施",
+              "value": "SA_hydroponics"
+            },
+            {
+              "label": "深度护盾耗散器",
+              "value": "SA_fluxShunt"
+            },
+            {
+              "label": "战机时流核心",
+              "value": "SA_fighterTimeflow"
+            },
+            {
+              "label": "泡泡护盾",
+              "value": "SA_bubbleShield"
+            },
+            {
+              "label": "跃迁驱动器",
+              "value": "SA_jumpEngine"
+            },
+            {
+              "label": "AI 战机数据链",
+              "value": "SA_aiFighterUplink"
+            },
+            {
+              "label": "极端改装",
+              "value": "SA_extremeModifications"
+            },
+            {
+              "label": "宏推进器",
+              "value": "SA_movableStation"
+            },
+            {
+              "label": "矿业空间站",
+              "value": "SA_miningStation"
+            },
+            {
+              "label": "特殊改装",
+              "value": "SA_specialModifications"
+            },
+            {
+              "label": "祝圣空间站",
+              "value": "SA_sanctifiedStation"
+            },
+            {
+              "label": "高能量吸引场",
+              "value": "SA_moteSink"
+            },
+            {
+              "label": "光尘沉降仪",
+              "value": "SA_moteSinkLow"
+            },
+            {
+              "label": "渊幕屏障",
+              "value": "SA_shroudedMantle"
+            },
+            {
+              "label": "渊幕透镜",
+              "value": "SA_shroudedLens"
+            },
+            {
+              "label": "渊幕雷暴",
+              "value": "SA_shroudedThunderhead"
+            },
+            {
+              "label": "渊幕信标",
+              "value": "SA_shroudedBeacon"
+            },
+            {
+              "label": "碎片集群",
+              "value": "SA_fragmentSwarm"
+            },
+            {
+              "label": "次级构筑器",
+              "value": "SA_secondaryFabricator"
+            },
+            {
+              "label": "碎片引导仪",
+              "value": "SA_fragmentCoordinator"
+            },
+            {
+              "label": "动能碎片",
+              "value": "SA_kineticFragments"
+            },
+            {
+              "label": "追踪碎片",
+              "value": "SA_seekerFragments"
+            },
+            {
+              "label": "攻击碎片",
+              "value": "SA_attackSwarms"
+            },
+            {
+              "label": "构筑集群",
+              "value": "SA_constructionSwarms"
+            },
+            {
+              "label": "织解集群",
+              "value": "SA_defabSwarms"
+            },
+            {
+              "label": "作战心智改装",
+              "value": "SA_warmindProtocols"
+            },
+            {
+              "label": "外置防御平台",
+              "value": "SA_defensePlatforms"
+            }
+          ],
+          "default": "",
+          "hint": "第二个参数填 all 表示教会该派系全部组件",
+          "required": true
+        }
+      ],
+      "run": "SA_teachAugment %factionId% %augmentId%"
+    },
+    "sa_generateaugments": {
+      "label": "生成站台组件",
+      "category": "market",
+      "desc": "给所有核心世界的空间站生成组件；只有把本 mod 加进旧存档时才需要跑",
+      "run": "SA_generateAugments"
+    },
+    "sa_genspecialcontent": {
+      "label": "更新探索内容",
+      "category": "system",
+      "desc": "把探索内容更新到当前版本（不保证与全新生成完全一致）",
+      "run": "SA_genSpecialContent"
+    },
+    "tem_triggercrusade": {
+      "label": "触发圣战",
+      "category": "map",
+      "desc": "立即开始一次圣殿骑士团圣战的秘密筹划阶段（仅战役星图可用）",
+      "run": "TEM_TriggerCrusade"
+    },
+    "printcontextinfo": {
+      "label": "打印OpenGL信息",
+      "category": "system",
+      "desc": "打印当前 OpenGL 上下文信息",
+      "run": "PrintContextInfo"
+    },
+    "showaastatus": {
+      "label": "抗锯齿像素标记",
+      "category": "system",
+      "desc": "把屏幕上应用了抗锯齿的像素标成绿色",
+      "params": [
+        {
+          "key": "on",
+          "label": "开关",
+          "type": "enum",
+          "options": [
+            {
+              "label": "开（显示）",
+              "value": "true"
+            },
+            {
+              "label": "关（隐藏）",
+              "value": "false"
+            }
+          ],
+          "default": "true"
+        }
+      ],
+      "run": "ShowAAStatus %on%"
+    },
+    "showinstancememoryusage": {
+      "label": "实例内存占用",
+      "category": "system",
+      "desc": "在屏幕上显示实例数据内存池的使用情况",
+      "params": [
+        {
+          "key": "on",
+          "label": "开关",
+          "type": "enum",
+          "options": [
+            {
+              "label": "开（显示）",
+              "value": "true"
+            },
+            {
+              "label": "关（隐藏）",
+              "value": "false"
+            }
+          ],
+          "default": "true"
+        }
+      ],
+      "run": "ShowInstanceMemoryUsage %on%"
+    },
+    "showstatictrailmemoryusage": {
+      "label": "尾迹内存占用",
+      "category": "system",
+      "desc": "在屏幕上显示静态尾迹内存池的使用情况",
+      "params": [
+        {
+          "key": "on",
+          "label": "开关",
+          "type": "enum",
+          "options": [
+            {
+              "label": "开（显示）",
+              "value": "true"
+            },
+            {
+              "label": "关（隐藏）",
+              "value": "false"
+            }
+          ],
+          "default": "true"
+        }
+      ],
+      "run": "ShowStaticTrailMemoryUsage %on%"
+    },
+    "showmultipasschannel": {
+      "label": "多通道渲染查看",
+      "category": "system",
+      "desc": "把多趟渲染的某个通道单独显示出来，用于排查渲染问题",
+      "params": [
+        {
+          "key": "channel",
+          "label": "通道",
+          "type": "enum",
+          "options": [
+            {
+              "label": "关闭（正常画面）",
+              "value": ""
+            },
+            {
+              "label": "成品画面 (BEAUTY)",
+              "value": "BEAUTY"
+            },
+            {
+              "label": "颜色 (COLOR)",
+              "value": "COLOR"
+            },
+            {
+              "label": "自发光 (EMISSIVE)",
+              "value": "EMISSIVE"
+            },
+            {
+              "label": "位置 (POSITION)",
+              "value": "POSITION"
+            },
+            {
+              "label": "法线 (NORMAL)",
+              "value": "NORMAL"
+            },
+            {
+              "label": "切线 (TANGENT)",
+              "value": "TANGENT"
+            },
+            {
+              "label": "材质 (MATERIAL)",
+              "value": "MATERIAL"
+            },
+            {
+              "label": "泛光 (BLOOM)",
+              "value": "BLOOM"
+            }
+          ],
+          "default": "",
+          "hint": "留空恢复正常画面；其余选项把对应渲染通道单独显示出来（BEAUTY 就是最终成品色）"
+        }
+      ],
+      "run": "ShowMultiPassChannel %channel%"
+    },
+    "infinitefuel": {
+      "label": "无限燃料",
+      "category": "economy",
+      "desc": "开关舰队的无限燃料；买卖与任务奖励照常计算",
+      "run": "InfiniteFuel"
+    },
+    "infinitesupplies": {
+      "label": "无限补给",
+      "category": "economy",
+      "desc": "开关舰队的无限补给；买卖与任务奖励照常计算",
+      "run": "InfiniteSupplies"
+    },
+    "legacyconsolesettings": {
+      "label": "控制台设置",
+      "category": "system",
+      "desc": "打开控制台自带的旧版设置菜单（仅旧版控制台有效）",
+      "params": [
+        {
+          "key": "mode",
+          "label": "模式（可留空）",
+          "type": "text",
+          "default": "",
+          "hint": "留空打开设置菜单（关掉控制台后弹出）；填 reset 恢复控制台默认设置。注意：只有旧版控制台能用，新版悬浮控制台会提示只支持旧版"
+        }
+      ],
+      "run": "LegacyConsoleSettings %mode%"
+    },
+    "spawnasteroids": {
+      "label": "生成小行星",
+      "category": "combat",
+      "desc": "战斗中手动投放小行星：点击拖拽决定位置与初速，按 6~0 选大小，空格确认",
+      "run": "SpawnAsteroids"
+    },
+    "spawnderelict": {
+      "label": "生成弃船",
+      "category": "map",
+      "desc": "在舰队附近生成一艘可打捞的漂流弃船",
+      "params": [
+        {
+          "key": "hullId",
+          "label": "舰船",
+          "type": "id",
+          "source": "ship",
+          "default": "",
+          "required": true,
+          "hint": "选一个空船体；生成的是可打捞状态"
+        }
+      ],
+      "run": "SpawnDerelict %hullId%"
+    },
+    "spawnfleet": {
+      "label": "生成舰队",
+      "category": "fleet",
+      "desc": "在玩家附近生成一支属于指定派系的巡逻舰队",
+      "params": [
+        {
+          "key": "faction",
+          "label": "派系",
+          "type": "id",
+          "source": "faction",
+          "default": "hegemony",
+          "required": true
+        },
+        {
+          "key": "combatFP",
+          "label": "战斗部署点",
+          "type": "int",
+          "default": 50,
+          "min": 1,
+          "hint": "按舰队点计算的规模，值越大舰队越强"
+        },
+        {
+          "key": "name",
+          "label": "舰队名称（可留空）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "SpawnFleet %faction% %combatFP% %name%"
+    },
+    "test": {
+      "label": "测试命令",
+      "category": "system",
+      "desc": "控制台作者自用的原型命令，一般没什么实际效果",
+      "params": [
+        {
+          "key": "arg",
+          "label": "参数（可留空）",
+          "type": "text",
+          "default": ""
+        }
+      ],
+      "run": "test %arg%"
+    },
+    "consolefrontend": {
+      "label": "前端面板",
+      "category": "system",
+      "desc": "打开或关闭控制台前端按钮面板，也可重载命令目录或重置全部参数",
+      "params": [
+        {
+          "key": "action",
+          "label": "操作",
+          "type": "enum",
+          "options": [
+            {
+              "label": "打开面板",
+              "value": "open"
+            },
+            {
+              "label": "关闭面板",
+              "value": "close"
+            },
+            {
+              "label": "重载命令目录",
+              "value": "reload"
+            },
+            {
+              "label": "重置全部参数",
+              "value": "resetparams"
+            },
+            {
+              "label": "重置字体",
+              "value": "resetfont"
+            }
+          ],
+          "default": "open"
+        }
+      ],
+      "run": "ConsoleFrontend %action%"
     }
   }
 }

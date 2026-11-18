@@ -101,6 +101,25 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     private String editing;
     private final Map<String, String> draft = new LinkedHashMap<String, String>();
 
+    /**
+     * 待确认执行的动作（非 null = 确认对话框正在显示）。
+     *
+     * <p><b>为什么不用游戏的 showConfirmDialog</b>：反汇编
+     * {@code CampaignState.showConfirmDialog} 的字节码，开头是
+     * {@code getfield dialogType; ifnull 9; iconst_0; ireturn} ——
+     * 只要当前已经有对话框占着 {@code dialogType} 就直接返回 false，什么都不画。
+     * 而本面板正是通过 {@code showInteractionDialog} 打开的，同样会设置 dialogType，
+     * 于是面板开着时那次调用<b>永远返回 false</b>，确认框一次都不会出现（实测确认无效）。
+     * 因此改为在面板内部自绘确认层。
+     */
+    private Runnable confirmAction;
+    /** 确认层里要显示的命令行预览。 */
+    private List<String> confirmLines;
+    /** 发起确认的命令（用于标题）。 */
+    private String confirmCommand;
+    /** 弹出确认层前正在编辑的命令；取消后回到它，免得玩家重新点开参数区。 */
+    private String confirmReturnEditing;
+
     private boolean pickerOpen;
     private String pickerCommand;
     private String pickerParamKey;
@@ -932,7 +951,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
 
         try {
             buildHeader(w, h, margin);
-            if (pickerOpen) {
+            if (confirmAction != null) {
+                // 危险操作确认层独占整个面板：与选择器同理，底层不能留任何可接收
+                // 事件的控件，否则玩家可能点到底下的命令按钮把确认绕过去。
+                buildConfirmLayer(w, h, margin);
+            } else if (pickerOpen) {
                 // 选择器独占整个面板：不渲染底层按钮网格 / 参数区 / 日志区。
                 // 这样底层不存在任何可接收事件的控件，鼠标不会【漏】到下面
                 // （原先选择器只是叠在网格之上，底层按钮仍在收事件）。
@@ -1720,6 +1743,105 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
         place(box, x, y);
     }
 
+    // ================= 危险操作确认层 =================
+
+    /**
+     * 自绘的危险操作确认层（独占整个面板，与选择器同级）。
+     *
+     * <p><b>为什么必须自绘</b>：{@code CampaignUIAPI.showConfirmDialog} 在本面板打开时
+     * <b>永远不会显示</b>。反汇编 {@code com.fs.starfarer.campaign.CampaignState.showConfirmDialog}
+     * 的字节码，方法开头是：
+     * <pre>
+     *   0: getfield   dialogType
+     *   4: ifnull     9      // dialogType == null 才继续往下画
+     *   7: iconst_0
+     *   8: ireturn           // 否则直接返回 false，什么都不画
+     * </pre>
+     * 也就是「当前已经有对话框占着 dialogType 就拒绝」。本面板正是通过
+     * {@code showInteractionDialog} 打开的（内部同样 putfield dialogType），
+     * 于是那次调用必然返回 false —— 旧代码写的是 {@code if (shown) return;}，
+     * 结果就是静默跳过、直接执行危险命令，确认形同虚设。
+     *
+     * <p>确认层的状态由 {@link #confirmAction}（非 null 即显示）、
+     * {@link #confirmCommand}、{@link #confirmLines} 三个字段承载，
+     * 由 {@link #runCommand} 填充、{@code buttonPressed} 的 confirm|yes / confirm|no 收尾。
+     */
+    private void buildConfirmLayer(float w, float h, float margin) {
+        float rowW = w - margin * 2f;
+        float areaH = Math.max(m(220f), h - Y_CATEGORY - 16f);
+
+        CustomPanelAPI box = newPanel(rowW, areaH);
+        drawPanelBackground(box, rowW, areaH);
+
+        CatalogEntry target = confirmCommand == null ? null : catalog.byCommand(confirmCommand);
+        String name = target == null ? confirmCommand : target.labelOrName();
+
+        // ---- 标题 ----
+        TooltipMakerAPI title = box.createUIElement(rowW - m(24f), m(34f), false);
+        box.addUIElement(title).inTL(12f, m(12f));
+        title.setParaFont(fontPath());
+        title.addPara(escapePercent("确认执行【" + name + "】？"), 8f, Misc.getNegativeHighlightColor());
+
+        // ---- 警示文案 ----
+        TooltipMakerAPI warnTm = box.createUIElement(rowW - m(24f), m(56f), false);
+        box.addUIElement(warnTm).inTL(12f, m(48f));
+        warnTm.setParaFont(fontPath());
+        warnTm.addPara("该操作可能无法撤销，执行前请确认参数无误。", 5f, Misc.getGrayColor());
+        warnTm.addPara("点【执行】立即生效；点【取消】或按 ESC 返回。", 5f, Misc.getGrayColor());
+
+        // ---- 将要执行的命令行（逐条列出）----
+        List<String> lines = confirmLines == null ? new ArrayList<String>() : confirmLines;
+        float lineY = m(110f);
+        TooltipMakerAPI cmdTm = box.createUIElement(rowW - m(24f), m(26f), false);
+        box.addUIElement(cmdTm).inTL(12f, lineY);
+        cmdTm.setParaFont(fontPath());
+        cmdTm.addPara(escapePercent("将要执行："), 5f, Misc.getHighlightColor());
+        lineY += m(24f);
+        for (int i = 0; i < lines.size(); i++) {
+            String line = lines.get(i);
+            if (line == null || line.trim().isEmpty()) {
+                continue;
+            }
+            TooltipMakerAPI one = box.createUIElement(rowW - m(24f), m(24f), false);
+            box.addUIElement(one).inTL(20f, lineY);
+            one.setParaFont(fontPath());
+            // 命令可能很长（天体类带一堆参数），单独一行会溢出，截断并挂完整内容到悬停提示。
+            String shown = shorten(line.trim(), 108);
+            LabelAPI lab = one.addPara(escapePercent(shown), 5f, Misc.getTextColor());
+            if (!shown.equals(line.trim())) {
+                one.addTooltipToPrevious(new TooltipMakerAPI.TooltipCreator() {
+                    @Override
+                    public boolean isTooltipExpandable(Object tooltipParam) {
+                        return false;
+                    }
+
+                    @Override
+                    public float getTooltipWidth(Object tooltipParam) {
+                        return 900f;
+                    }
+
+                    @Override
+                    public void createTooltip(TooltipMakerAPI tooltip, boolean expanded, Object tooltipParam) {
+                        tooltip.setParaFont(fontPath());
+                        tooltip.addPara(escapePercent(line.trim()), 6f, Misc.getTextColor());
+                    }
+                }, TooltipMakerAPI.TooltipLocation.BELOW);
+            }
+            lineY += m(24f);
+        }
+
+        // ---- 底部两个按钮（右对齐，与参数区底部按钮同一观感）----
+        float btnW = m(110f);
+        float btnH = m(26f);
+        float gap = m(10f);
+        float btnY = Math.min(areaH - btnH - m(16f), lineY + m(24f));
+        button(box, rowW - btnW * 2f - gap - 12f, btnY, btnW, btnH, "执行", "confirm|yes",
+                "确认并立即执行");
+        button(box, rowW - btnW - 12f, btnY, btnW, btnH, "取消", "confirm|no",
+                "返回，不执行任何命令");
+
+        place(box, margin, Y_CATEGORY);
+    }
     // ================= 控件工厂 =================
 
     private static double clampFraction(double v) {
@@ -2022,6 +2144,11 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 if (e.isKeyDownEvent() && e.getEventValue() == Keyboard.KEY_G
                         && focusedField == null && !pickerOpen) {
                     e.consume();
+                    if (confirmAction != null) {
+                        // 确认层显示时 G 与 ESC 同义：只取消，不顺手关掉整个面板。
+                        onEscape();
+                        return;
+                    }
                     info("G 键关闭");
                     close();
                     return;
@@ -2328,6 +2455,17 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
     }
 
     private void onEscape() {
+        if (confirmAction != null) {
+            // 确认层优先：ESC 只取消确认，不能顺手把整个面板关掉。
+            confirmAction = null;
+            confirmLines = null;
+            confirmCommand = null;
+            editing = confirmReturnEditing;
+            confirmReturnEditing = null;
+            statusLine = "已取消";
+            needsRebuild = true;
+            return;
+        }
         if (pickerOpen) {
             pickerOpen = false;
             pickerFont = false;
@@ -2601,6 +2739,27 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
                 pickerFont = false;
                 pickerSuggestions = null;
                 pickerEnum = false;
+                needsRebuild = true;
+            } else if ("confirm|yes".equals(id)) {
+                info("确认执行: " + confirmCommand);
+                Runnable act = confirmAction;
+                confirmAction = null;
+                confirmLines = null;
+                confirmCommand = null;
+                confirmReturnEditing = null;
+                needsRebuild = true;
+                if (act != null) {
+                    act.run();
+                }
+            } else if ("confirm|no".equals(id)) {
+                info("已取消执行: " + confirmCommand);
+                confirmAction = null;
+                confirmLines = null;
+                confirmCommand = null;
+                // 回到取消前的参数页，玩家不用重新点「调整参数」。
+                editing = confirmReturnEditing;
+                confirmReturnEditing = null;
+                statusLine = "已取消";
                 needsRebuild = true;
             } else if (id.startsWith("pickerpage|")) {
                 pickerPage += "next".equals(id.substring(11)) ? 1 : -1;
@@ -3143,37 +3302,36 @@ public class FrontendPanel extends BaseCustomUIPanelPlugin {
             return;
         }
 
-        // 危险操作二次确认（设置项 cf_confirmDestructive）
-        if (e.confirm && FrontendSettings.confirmDestructive
-                && Global.getCurrentState() == GameState.CAMPAIGN) {
-            try {
-                CampaignUIAPI ui = Global.getSector().getCampaignUI();
-                if (ui != null) {
-                    StringBuilder preview = new StringBuilder();
-                    for (int i = 0; i < lines.size(); i++) {
-                        if (i > 0) {
-                            preview.append("  ;  ");
-                        }
-                        preview.append(lines.get(i));
-                    }
-                    final CatalogEntry entry = e;
-                    boolean shown = ui.showConfirmDialog(
-                            "确认执行【" + e.labelOrName() + "】？",
-                            "该操作可能无法撤销。\n\n将要执行：\n" + preview,
-                            "执行",
-                            new Script() {
-                                @Override
-                                public void run() {
-                                    persistAndRun(entry, lines);
-                                }
-                            },
-                            null);
-                    if (shown) {
-                        return;
-                    }
+        // 危险操作二次确认（设置项 cf_confirmDestructive）。
+        //
+        // 这里【不能】用 CampaignUIAPI.showConfirmDialog：反汇编
+        // CampaignState.showConfirmDialog 的字节码，开头就是
+        //   getfield dialogType; ifnull 9; iconst_0; ireturn
+        // —— 当前只要有对话框占着 dialogType 就直接返回 false 什么都不画。
+        // 本面板正是用 showInteractionDialog 打开的（同样会 putfield dialogType），
+        // 于是面板开着时那次调用必然返回 false，确认框一次都不会出现，
+        // 而旧代码写的是 if (shown) return; —— 于是静默跳过、直接执行。
+        // 这就是「危险操作二次确认无效」的根因。
+        // 改为在面板内部自绘确认层（见 buildConfirmLayer）。
+        if (e.confirm && FrontendSettings.confirmDestructive) {
+            final CatalogEntry entry = e;
+            final List<String> finalLines = new ArrayList<String>(lines);
+            confirmCommand = entry.command;
+            confirmLines = finalLines;
+            confirmReturnEditing = editing;
+            // 这一行是刻意留的：确认环节出问题时（历史上整整一版都没弹过框）
+            // 只有日志能看出「到底有没有进确认分支」，否则玩家只看到命令静默执行。
+            info("危险操作待确认: " + entry.command + "（" + finalLines.size() + " 条）");
+            confirmAction = new Runnable() {
+                @Override
+                public void run() {
+                    persistAndRun(entry, finalLines);
                 }
-            } catch (Throwable ignored) {
-            }
+            };
+            // 收起参数区，确认层独占显示（否则两层会叠在一起）。
+            editing = null;
+            needsRebuild = true;
+            return;
         }
         persistAndRun(e, lines);
     }

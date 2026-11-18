@@ -168,7 +168,8 @@ if ($Verify) {
                 if ($p.type -eq 'enum' -and -not $p.options) {
                     $typeBad += "$($prop.Name).$($p.key): type=enum 缺少 options"
                 }
-                if (($p.type -eq 'int' -or $p.type -eq 'float') -and $null -ne $p.default) {
+                # 空 default 是合法的「留空」语义（面板会把空值从命令行里去掉），不当作类型错误
+                if (($p.type -eq 'int' -or $p.type -eq 'float') -and $null -ne $p.default -and [string]$p.default -ne '') {
                     $d = 0.0
                     if (-not [double]::TryParse([string]$p.default, [ref]$d)) {
                         $typeBad += "$($prop.Name).$($p.key): default '$($p.default)' 不是数字"
